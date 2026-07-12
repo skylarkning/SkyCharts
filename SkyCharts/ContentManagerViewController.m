@@ -2,19 +2,20 @@
 
 @interface ContentManagerViewController ()
 @property(nonatomic, retain) UITableView *tableView;
+@property(nonatomic, retain) UILabel *storageLabel;
 @property(nonatomic, retain) NSArray *rootNodes;
 @property(nonatomic, retain) NSArray *rows;
 @property(nonatomic, retain) NSMutableSet *expandedKeys;
 @end
 
 @implementation ContentManagerViewController
-@synthesize tableView=_tableView,rootNodes=_rootNodes,rows=_rows,expandedKeys=_expandedKeys;
+@synthesize tableView=_tableView,storageLabel=_storageLabel,rootNodes=_rootNodes,rows=_rows,expandedKeys=_expandedKeys;
 
 - (void)viewDidLoad {
     [super viewDidLoad];self.title=@"Downloaded Content";
     self.navigationItem.rightBarButtonItem=[[[UIBarButtonItem alloc]initWithBarButtonSystemItem:UIBarButtonSystemItemDone target:self action:@selector(done)]autorelease];
     self.expandedKeys=[NSMutableSet set];
-    self.tableView=[[[UITableView alloc]initWithFrame:self.view.bounds style:UITableViewStyleGrouped]autorelease];self.tableView.autoresizingMask=UIViewAutoresizingFlexibleWidth|UIViewAutoresizingFlexibleHeight;self.tableView.dataSource=self;self.tableView.delegate=self;[self.view addSubview:self.tableView];[self reloadContent];
+    self.tableView=[[[UITableView alloc]initWithFrame:self.view.bounds style:UITableViewStyleGrouped]autorelease];self.tableView.autoresizingMask=UIViewAutoresizingFlexibleWidth|UIViewAutoresizingFlexibleHeight;self.tableView.dataSource=self;self.tableView.delegate=self;UIView *summary=[[[UIView alloc]initWithFrame:CGRectMake(0,0,self.view.bounds.size.width,62)]autorelease];summary.autoresizingMask=UIViewAutoresizingFlexibleWidth;self.storageLabel=[[[UILabel alloc]initWithFrame:CGRectMake(18,7,summary.bounds.size.width-36,48)]autorelease];self.storageLabel.autoresizingMask=UIViewAutoresizingFlexibleWidth;self.storageLabel.backgroundColor=[UIColor clearColor];self.storageLabel.numberOfLines=2;self.storageLabel.textAlignment=NSTextAlignmentCenter;self.storageLabel.font=[UIFont boldSystemFontOfSize:14];self.storageLabel.textColor=[UIColor colorWithWhite:.28 alpha:1];self.storageLabel.shadowColor=[UIColor whiteColor];self.storageLabel.shadowOffset=CGSizeMake(0,1);[summary addSubview:self.storageLabel];self.tableView.tableHeaderView=summary;[self.view addSubview:self.tableView];[self reloadContent];
 }
 - (void)done { [self dismissModalViewControllerAnimated:YES]; }
 
@@ -31,11 +32,14 @@
 }
 - (NSString *)countryName:(NSString *)country { NSLocale *locale=[[[NSLocale alloc]initWithLocaleIdentifier:@"en_US"]autorelease];return [locale displayNameForKey:NSLocaleCountryCode value:[country uppercaseString]]?:[country uppercaseString]; }
 - (NSArray *)sortedKeys:(NSDictionary *)dictionary { return [[dictionary allKeys]sortedArrayUsingSelector:@selector(localizedCaseInsensitiveCompare:)]; }
-- (NSDictionary *)node:(NSString *)title subtitle:(NSString *)subtitle key:(NSString *)key level:(NSInteger)level children:(NSArray *)children kind:(NSString *)kind targets:(NSArray *)targets { return [NSDictionary dictionaryWithObjectsAndKeys:title?:@"Unknown",@"title",subtitle?:@"",@"subtitle",key?:@"",@"key",[NSNumber numberWithInteger:level],@"level",children?:[NSArray array],@"children",kind?:@"group",@"kind",targets?:[NSArray array],@"targets",nil]; }
+- (NSString *)formattedBytes:(unsigned long long)bytes { double value=(double)bytes;NSArray *units=[NSArray arrayWithObjects:@"bytes",@"KB",@"MB",@"GB",@"TB",nil];NSUInteger unit=0;while(value>=1024&&unit+1<units.count){value/=1024;unit++;}if(unit==0)return [NSString stringWithFormat:@"%llu bytes",bytes];return [NSString stringWithFormat:value>=100?@"%.0f %@":value>=10?@"%.1f %@":@"%.2f %@",value,[units objectAtIndex:unit]]; }
+- (unsigned long long)sizeOfFiles:(NSSet *)files sizes:(NSDictionary *)sizes { unsigned long long total=0;for(NSString *path in files)total+=[[sizes objectForKey:path]unsignedLongLongValue];return total; }
+- (NSDictionary *)node:(NSString *)title subtitle:(NSString *)subtitle key:(NSString *)key level:(NSInteger)level children:(NSArray *)children kind:(NSString *)kind targets:(NSArray *)targets files:(NSSet *)files sizes:(NSDictionary *)sizes { unsigned long long bytes=[self sizeOfFiles:files sizes:sizes];NSString *detail=subtitle.length?[NSString stringWithFormat:@"%@ • %@",subtitle,[self formattedBytes:bytes]]:[self formattedBytes:bytes];return [NSDictionary dictionaryWithObjectsAndKeys:title?:@"Unknown",@"title",detail,@"subtitle",key?:@"",@"key",[NSNumber numberWithInteger:level],@"level",children?:[NSArray array],@"children",kind?:@"group",@"kind",targets?:[NSArray array],@"targets",[files allObjects]?:[NSArray array],@"files",[NSNumber numberWithUnsignedLongLong:bytes],@"bytes",nil]; }
 - (void)addTargetsFromNodes:(NSArray *)nodes toArray:(NSMutableArray *)targets { for(NSDictionary *node in nodes)[targets addObjectsFromArray:[node objectForKey:@"targets"]]; }
+- (void)addFilesFromNodes:(NSArray *)nodes toSet:(NSMutableSet *)files { for(NSDictionary *node in nodes)[files addObjectsFromArray:[node objectForKey:@"files"]]; }
 
 - (void)reloadContent {
-    NSString *root=@"/var/mobile/Library/SkyCharts/ChartPacks";NSFileManager *fm=[NSFileManager defaultManager];NSMutableDictionary *tree=[NSMutableDictionary dictionary];
+    NSString *root=@"/var/mobile/Library/SkyCharts/ChartPacks";NSFileManager *fm=[NSFileManager defaultManager];NSMutableDictionary *tree=[NSMutableDictionary dictionary],*fileSizes=[NSMutableDictionary dictionary];unsigned long long totalUsed=0;NSDirectoryEnumerator *enumerator=[fm enumeratorAtPath:root];NSString *relativePath=nil;while((relativePath=[enumerator nextObject])){NSDictionary *attributes=[enumerator fileAttributes];if([[attributes objectForKey:NSFileType]isEqual:NSFileTypeRegular]){unsigned long long bytes=[[attributes objectForKey:NSFileSize]unsignedLongLongValue];NSString *absolute=[root stringByAppendingPathComponent:relativePath];[fileSizes setObject:[NSNumber numberWithUnsignedLongLong:bytes]forKey:absolute];totalUsed+=bytes;}}NSDictionary *fileSystem=[fm attributesOfFileSystemForPath:root error:NULL];unsigned long long available=[[fileSystem objectForKey:NSFileSystemFreeSize]unsignedLongLongValue];self.storageLabel.text=[NSString stringWithFormat:@"Total SkyCharts storage: %@\nAvailable on iPad: %@",[self formattedBytes:totalUsed],[self formattedBytes:available]];
     NSArray *directories=[[fm contentsOfDirectoryAtPath:root error:NULL]sortedArrayUsingSelector:@selector(caseInsensitiveCompare:)];
     for(NSString *directory in directories){
         NSString *packPath=[root stringByAppendingPathComponent:directory];NSData *data=[NSData dataWithContentsOfFile:[packPath stringByAppendingPathComponent:@"pack.json"]];NSDictionary *manifest=data?[NSJSONSerialization JSONObjectWithData:data options:0 error:NULL]:nil;if(!manifest)continue;
@@ -49,8 +53,9 @@
             NSMutableDictionary *regions=[countries objectForKey:country];if(!regions){regions=[NSMutableDictionary dictionary];[countries setObject:regions forKey:country];}
             NSMutableDictionary *cities=[regions objectForKey:region];if(!cities){cities=[NSMutableDictionary dictionary];[regions setObject:cities forKey:region];}
             NSMutableDictionary *airports=[cities objectForKey:city];if(!airports){airports=[NSMutableDictionary dictionary];[cities setObject:airports forKey:city];}
-            NSMutableDictionary *record=[airports objectForKey:ident];if(!record){record=[NSMutableDictionary dictionaryWithObjectsAndKeys:airportName,@"name",[NSMutableArray array],@"targets",nil];[airports setObject:record forKey:ident];}
+            NSMutableDictionary *record=[airports objectForKey:ident];if(!record){record=[NSMutableDictionary dictionaryWithObjectsAndKeys:airportName,@"name",[NSMutableArray array],@"targets",[NSMutableSet set],@"files",nil];[airports setObject:record forKey:ident];}
             NSMutableArray *targets=[record objectForKey:@"targets"];BOOL duplicate=NO;for(NSDictionary *target in targets)if([[target objectForKey:@"path"]isEqual:packPath]){duplicate=YES;break;}if(!duplicate)[targets addObject:[NSDictionary dictionaryWithObjectsAndKeys:packPath,@"path",ident,@"ident",nil]];
+            NSMutableSet *files=[record objectForKey:@"files"];for(NSDictionary *category in [airport objectForKey:@"categories"])for(NSDictionary *chart in [category objectForKey:@"charts"])for(NSDictionary *page in [chart objectForKey:@"pages"]){NSString *asset=[page objectForKey:@"light"];if(asset.length)[files addObject:[packPath stringByAppendingPathComponent:asset]];}
         }
     }
     NSMutableArray *roots=[NSMutableArray array];
@@ -62,14 +67,14 @@
                 NSMutableDictionary *cities=[regions objectForKey:region];NSMutableArray *cityNodes=[NSMutableArray array];
                 for(NSString *city in [self sortedKeys:cities]){
                     NSMutableDictionary *airports=[cities objectForKey:city];NSMutableArray *airportNodes=[NSMutableArray array];
-                    for(NSString *ident in [self sortedKeys:airports]){NSDictionary *record=[airports objectForKey:ident];NSString *name=[record objectForKey:@"name"],*title=name.length&&![name isEqual:ident]?[NSString stringWithFormat:@"%@ / %@",ident,name]:ident,*key=[NSString stringWithFormat:@"%@/%@/%@/%@/%@",continent,country,region,city,ident];NSArray *targets=[record objectForKey:@"targets"];[airportNodes addObject:[self node:title subtitle:[NSString stringWithFormat:@"%lu installed package entr%@",(unsigned long)targets.count,targets.count==1?@"y":@"ies"] key:key level:4 children:nil kind:@"airport" targets:targets]];}
-                    NSMutableArray *targets=[NSMutableArray array];[self addTargetsFromNodes:airportNodes toArray:targets];NSString *key=[NSString stringWithFormat:@"%@/%@/%@/%@",continent,country,region,city];[cityNodes addObject:[self node:city subtitle:[NSString stringWithFormat:@"%lu airport%@",(unsigned long)airportNodes.count,airportNodes.count==1?@"":@"s"] key:key level:3 children:airportNodes kind:@"city" targets:targets]];
+                    for(NSString *ident in [self sortedKeys:airports]){NSDictionary *record=[airports objectForKey:ident];NSString *name=[record objectForKey:@"name"],*title=name.length&&![name isEqual:ident]?[NSString stringWithFormat:@"%@ / %@",ident,name]:ident,*key=[NSString stringWithFormat:@"%@/%@/%@/%@/%@",continent,country,region,city,ident];NSArray *targets=[record objectForKey:@"targets"];[airportNodes addObject:[self node:title subtitle:[NSString stringWithFormat:@"%lu installed package entr%@",(unsigned long)targets.count,targets.count==1?@"y":@"ies"] key:key level:4 children:nil kind:@"airport" targets:targets files:[record objectForKey:@"files"] sizes:fileSizes]];}
+                    NSMutableArray *targets=[NSMutableArray array];NSMutableSet *files=[NSMutableSet set];[self addTargetsFromNodes:airportNodes toArray:targets];[self addFilesFromNodes:airportNodes toSet:files];NSString *key=[NSString stringWithFormat:@"%@/%@/%@/%@",continent,country,region,city];[cityNodes addObject:[self node:city subtitle:[NSString stringWithFormat:@"%lu airport%@",(unsigned long)airportNodes.count,airportNodes.count==1?@"":@"s"] key:key level:3 children:airportNodes kind:@"city" targets:targets files:files sizes:fileSizes]];
                 }
-                NSMutableArray *targets=[NSMutableArray array];[self addTargetsFromNodes:cityNodes toArray:targets];NSString *key=[NSString stringWithFormat:@"%@/%@/%@",continent,country,region];[regionNodes addObject:[self node:region subtitle:[NSString stringWithFormat:@"%lu cit%@",(unsigned long)cityNodes.count,cityNodes.count==1?@"y":@"ies"] key:key level:2 children:cityNodes kind:@"region" targets:targets]];
+                NSMutableArray *targets=[NSMutableArray array];NSMutableSet *files=[NSMutableSet set];[self addTargetsFromNodes:cityNodes toArray:targets];[self addFilesFromNodes:cityNodes toSet:files];NSString *key=[NSString stringWithFormat:@"%@/%@/%@",continent,country,region];[regionNodes addObject:[self node:region subtitle:[NSString stringWithFormat:@"%lu cit%@",(unsigned long)cityNodes.count,cityNodes.count==1?@"y":@"ies"] key:key level:2 children:cityNodes kind:@"region" targets:targets files:files sizes:fileSizes]];
             }
-            NSMutableArray *targets=[NSMutableArray array];[self addTargetsFromNodes:regionNodes toArray:targets];NSString *key=[NSString stringWithFormat:@"%@/%@",continent,country];[countryNodes addObject:[self node:country subtitle:[NSString stringWithFormat:@"%lu subdivision%@",(unsigned long)regionNodes.count,regionNodes.count==1?@"":@"s"] key:key level:1 children:regionNodes kind:@"country" targets:targets]];
+            NSMutableArray *targets=[NSMutableArray array];NSMutableSet *files=[NSMutableSet set];[self addTargetsFromNodes:regionNodes toArray:targets];[self addFilesFromNodes:regionNodes toSet:files];NSString *key=[NSString stringWithFormat:@"%@/%@",continent,country];[countryNodes addObject:[self node:country subtitle:[NSString stringWithFormat:@"%lu subdivision%@",(unsigned long)regionNodes.count,regionNodes.count==1?@"":@"s"] key:key level:1 children:regionNodes kind:@"country" targets:targets files:files sizes:fileSizes]];
         }
-        NSMutableArray *targets=[NSMutableArray array];[self addTargetsFromNodes:countryNodes toArray:targets];[roots addObject:[self node:continent subtitle:[NSString stringWithFormat:@"%lu countr%@",(unsigned long)countryNodes.count,countryNodes.count==1?@"y":@"ies"] key:continent level:0 children:countryNodes kind:@"continent" targets:targets]];
+        NSMutableArray *targets=[NSMutableArray array];NSMutableSet *files=[NSMutableSet set];[self addTargetsFromNodes:countryNodes toArray:targets];[self addFilesFromNodes:countryNodes toSet:files];[roots addObject:[self node:continent subtitle:[NSString stringWithFormat:@"%lu countr%@",(unsigned long)countryNodes.count,countryNodes.count==1?@"y":@"ies"] key:continent level:0 children:countryNodes kind:@"continent" targets:targets files:files sizes:fileSizes]];
     }
     self.rootNodes=roots;[self rebuildRows];
 }
@@ -102,5 +107,5 @@
     NSDictionary *result=[NSDictionary dictionaryWithObjectsAndKeys:[NSNumber numberWithUnsignedInteger:deleted],@"deleted",[NSNumber numberWithUnsignedInteger:failures],@"failures",nil];[self performSelectorOnMainThread:@selector(deleteTargetsFinished:)withObject:result waitUntilDone:NO];[pool drain];
 }
 - (void)deleteTargetsFinished:(NSDictionary *)result { NSUInteger deleted=[[result objectForKey:@"deleted"]unsignedIntegerValue],failures=[[result objectForKey:@"failures"]unsignedIntegerValue];self.navigationItem.prompt=failures?[NSString stringWithFormat:@"Deleted %lu; %lu package error%@",(unsigned long)deleted,(unsigned long)failures,failures==1?@"":@"s"]:nil;self.tableView.userInteractionEnabled=YES;[self reloadContent]; }
-- (void)dealloc { [_tableView release];[_rootNodes release];[_rows release];[_expandedKeys release];[super dealloc]; }
+- (void)dealloc { [_tableView release];[_storageLabel release];[_rootNodes release];[_rows release];[_expandedKeys release];[super dealloc]; }
 @end
