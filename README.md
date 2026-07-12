@@ -96,7 +96,7 @@ The iPad uses an old SSH server, so modern OpenSSH needs RSA compatibility flags
 
 ```sh
 IP=192.168.2.19
-DEB=packages/com.skyning.skycharts_0.10.3-1+debug_iphoneos-arm.deb
+DEB=packages/com.skyning.skycharts_0.10.4-1+debug_iphoneos-arm.deb
 
 scp -O -o StrictHostKeyChecking=no \
   -o HostKeyAlgorithms=+ssh-rsa \
@@ -208,7 +208,7 @@ TAXI        AGC, APC, AFC, LVC, ADC, APT
 MISC        Any remaining provider type, including AOI
 ```
 
-The five controls sit inside a single dark vertical pill. The active category uses an inset orange selector with a dark central label, following the classic Jeppesen iPad visual language. Within a section, runway charts are grouped under headers such as `RWY 10L` and `RWY 19R`; charts without runway metadata appear under `GENERAL`.
+The five controls sit inside a long dark vertical pill with protected space above STAR and below MISC, so the active orange selector remains fully visible at both ends. Tapping the selected category hides or reveals the chart list with a smooth leftward slide and fade while the chart viewer resizes. Within a section, runway charts are grouped under headers such as `RWY 10L` and `RWY 19R`; charts without runway metadata appear under `GENERAL`.
 
 Downloaded content is presented as a collapsible location hierarchy: continent → country → state/province/region → city. Airport totals appear at the city level instead of listing every airport as a separate row. Pack deletion remains available under the collapsible **Installed Packages** branch.
 
