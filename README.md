@@ -91,11 +91,15 @@ Open the gear menu and choose **About SkyCharts** to see the installed version, 
 
 <table>
   <tr>
-    <td width="50%"><img src="docs/screenshots/chart-list.png" alt="STAR procedure list and chart"><br><strong>Procedure list</strong> — runway-aware chart browsing.</td>
-    <td width="50%"><img src="docs/screenshots/chart-fullscreen.png" alt="Full-screen arrival chart"><br><strong>Expanded chart</strong> — collapse the list for a larger viewing area.</td>
+    <td width="50%"><img src="docs/screenshots/chart-types-star.png" alt="STAR chart list with orange LIDO type stripes"><br><strong>STAR charts</strong> — orange type stripes identify arrival procedures.</td>
+    <td width="50%"><img src="docs/screenshots/chart-types-sid.png" alt="SID chart list with green and gray LIDO type stripes"><br><strong>SID and SIDPT charts</strong> — procedure and transition types remain visually distinct.</td>
   </tr>
   <tr>
-    <td width="50%"><img src="docs/screenshots/airport-ground-chart.png" alt="Airport ground chart"><br><strong>Airport charts</strong> — ground and taxi charts under TAXI.</td>
+    <td width="50%"><img src="docs/screenshots/chart-types-approach.png" alt="Approach chart list with cyan IAC type stripes"><br><strong>Approach charts</strong> — cyan IAC stripes accompany runway-grouped procedures.</td>
+    <td width="50%"><img src="docs/screenshots/chart-types-airport.png" alt="Airport chart list with AFC, APC, LVC, and AGC type stripes"><br><strong>Airport chart families</strong> — AFC, APC, LVC, and AGC use consistent type colors.</td>
+  </tr>
+  <tr>
+    <td width="50%"><img src="docs/screenshots/chart-fullscreen.png" alt="Full-screen arrival chart"><br><strong>Expanded chart</strong> — collapse the list for a larger viewing area.</td>
     <td width="50%"><img src="docs/screenshots/weather.png" alt="Decoded METAR weather window"><br><strong>METAR weather</strong> — raw and decoded observations.</td>
   </tr>
   <tr>
