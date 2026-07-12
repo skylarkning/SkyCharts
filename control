@@ -1,0 +1,8 @@
+Package: com.skyning.atlassix
+Name: AtlasSix
+Version: 0.7.2
+Architecture: iphoneos-arm
+Description: Legacy iPad chart viewer prototype for iOS 6.
+Maintainer: skyning
+Author: skyning
+Section: Applications

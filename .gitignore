@@ -1,0 +1,20 @@
+# Credentials and private planner/session data
+work/msfs-cookie.txt
+**/*cookie*.txt
+*.cookie
+
+# Generated packs, downloader cache, agent jobs, and local logs
+work/
+outputs/
+packages/
+*.log
+
+# Theos/Xcode build products
+.theos/
+build/
+DerivedData/
+
+# Python bytecode and local tooling state
+__pycache__/
+*.py[cod]
+.DS_Store
