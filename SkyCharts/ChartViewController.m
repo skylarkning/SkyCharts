@@ -35,6 +35,7 @@
 @property(nonatomic, assign) NSInteger pageIndex;
 @property(nonatomic, assign) NSTimeInterval packStartedAt;
 @property(nonatomic, assign) CGSize lastViewerSize;
+@property(nonatomic, assign) CGSize lastCategoryLayoutSize;
 @property(nonatomic, assign) BOOL chartListVisible;
 @end
 
@@ -42,7 +43,7 @@
 @synthesize topBar=_topBar,footer=_footer,categoryRail=_categoryRail,airportButton=_airportButton,airportCaptionLabel=_airportCaptionLabel,searchField=_searchField,searchButton=_searchButton,settingsButton=_settingsButton,weatherButton=_weatherButton,fitButton=_fitButton,previousButton=_previousButton,nextButton=_nextButton,titleLabel=_titleLabel,statusLabel=_statusLabel;
 @synthesize categoryTable=_categoryTable,airportTable=_airportTable,chartTable=_chartTable,scrollView=_scrollView,imageView=_imageView;
 @synthesize allAirports=_allAirports,airports=_airports,categories=_categories,chartGroups=_chartGroups,selectedAirport=_selectedAirport,selectedChart=_selectedChart,chartPages=_chartPages,packJobID=_packJobID;
-@synthesize selectedCategoryIndex=_selectedCategoryIndex,pageIndex=_pageIndex,packStartedAt=_packStartedAt,lastViewerSize=_lastViewerSize,chartListVisible=_chartListVisible;
+@synthesize selectedCategoryIndex=_selectedCategoryIndex,pageIndex=_pageIndex,packStartedAt=_packStartedAt,lastViewerSize=_lastViewerSize,lastCategoryLayoutSize=_lastCategoryLayoutSize,chartListVisible=_chartListVisible;
 
 - (CAGradientLayer *)gradient:(CGRect)frame top:(CGFloat)top bottom:(CGFloat)bottom { CAGradientLayer *layer=[CAGradientLayer layer];layer.frame=frame;layer.colors=[NSArray arrayWithObjects:(id)[UIColor colorWithWhite:top alpha:1].CGColor,(id)[UIColor colorWithWhite:bottom alpha:1].CGColor,nil];return layer; }
 - (CAGradientLayer *)selectionGradient:(CGRect)frame { CAGradientLayer *layer=[CAGradientLayer layer];layer.frame=frame;layer.colors=[NSArray arrayWithObjects:(id)[UIColor colorWithRed:1 green:.55 blue:.48 alpha:1].CGColor,(id)[UIColor colorWithRed:1 green:.25 blue:.03 alpha:1].CGColor,(id)[UIColor colorWithRed:.72 green:.05 blue:.01 alpha:1].CGColor,nil];layer.locations=[NSArray arrayWithObjects:[NSNumber numberWithFloat:0],[NSNumber numberWithFloat:.55],[NSNumber numberWithFloat:1],nil];return layer; }
@@ -75,7 +76,7 @@
     [super viewWillLayoutSubviews];CGSize size=self.view.bounds.size;CGFloat top=58,footer=34,rail=size.width<800?66:78,list=self.chartListVisible?MIN(300,MAX(240,size.width*.34)):0,contentHeight=size.height-top-footer;
     self.categoryRail.frame=CGRectMake(0,0,rail,size.height);self.topBar.frame=CGRectMake(rail,0,size.width-rail,top);self.footer.frame=CGRectMake(rail,size.height-footer,size.width-rail,footer);
     self.airportButton.frame=CGRectMake(7,12,rail-14,68);self.airportCaptionLabel.frame=CGRectMake(1,8,self.airportButton.bounds.size.width-2,13);CGFloat categoryPadding=48,categoryHeight=MIN(390,size.height-190),categoryTop=MAX(100,(size.height-categoryHeight)/2);self.categoryTable.frame=CGRectMake(6,categoryTop,rail-12,categoryHeight);self.categoryTable.layer.cornerRadius=self.categoryTable.bounds.size.width/2;
-    NSUInteger categoryCount=MAX((NSUInteger)1,self.categories.count);self.categoryTable.rowHeight=(categoryHeight-categoryPadding)/categoryCount;
+    NSUInteger categoryCount=MAX((NSUInteger)1,self.categories.count);self.categoryTable.rowHeight=(categoryHeight-categoryPadding)/categoryCount;if(!CGSizeEqualToSize(self.lastCategoryLayoutSize,size)){self.lastCategoryLayoutSize=size;[self.categoryTable reloadData];[self.categoryTable layoutIfNeeded];self.categoryTable.contentOffset=CGPointZero;}
     self.chartTable.frame=CGRectMake(rail,top,list,contentHeight);self.chartTable.hidden=!self.chartListVisible;self.scrollView.frame=CGRectMake(rail+list,top,size.width-rail-list,contentHeight);
     self.settingsButton.frame=CGRectMake(self.topBar.bounds.size.width-54,8,46,42);self.weatherButton.frame=CGRectMake(7,size.height-footer-72,rail-14,58);self.titleLabel.frame=CGRectMake(12,5,self.topBar.bounds.size.width-78,46);self.statusLabel.frame=CGRectMake(8,1,self.footer.bounds.size.width-16,footer-2);
     [self styleAirportButton];[self styleChromeButton:self.settingsButton];[self styleRailButton:self.weatherButton];
