@@ -1,10 +1,108 @@
 # SkyCharts
 
-SkyCharts is a native UIKit chart viewer for jailbroken iPads running iOS 6. It presents Microsoft Flight Simulator 2024 LIDO charts in a Jeppesen-inspired interface and is designed to work offline after chart packs have been installed.
+<p align="center">
+  <img src="docs/screenshots/airport-ground-chart.png" alt="SkyCharts displaying the Vancouver airport ground chart" width="900">
+</p>
+
+SkyCharts brings an offline aviation-chart library to jailbroken iPads running iOS 6. The native UIKit application presents Microsoft Flight Simulator 2024 LIDO charts in a compact, Jeppesen-inspired interface designed for both portrait and landscape use.
+
+> **For flight simulation only. SkyCharts and its chart content must not be used for real-world navigation.**
+
+SkyCharts provides:
+
+- Offline airport, arrival, departure, approach, taxi, and miscellaneous charts.
+- Airport selection by four-character ICAO code.
+- Five compact chart categories: **STAR**, **SID**, **APP**, **TAXI**, and **MISC**.
+- Runway-grouped procedure lists and a collapsible chart sidebar.
+- Pinch-to-zoom, panning, automatic centering, and orientation-aware chart fitting.
+- Current METAR weather in raw and decoded views.
+- In-app chart downloads through a Mac on the same network.
+- A geographic content manager with per-level storage usage and swipe-to-delete.
+- A reusable Mac cache and single-stream TAR transfers for large offline libraries.
 
 The app does not contain an Xbox login, planner cookie, relay, or web browser. A Mac downloads authorized chart assets from the planner, builds a local pack, and transfers that pack to the iPad. The app reads packs from `/var/mobile/Library/SkyCharts/ChartPacks`. Version 0.8 automatically migrates packs and preferences from an existing AtlasSix installation.
 
 The earlier `relay/` service remains as an optional compatibility prototype; it is not required for the offline workflow.
+
+## User guide
+
+### 1. Prepare the Mac companion
+
+Complete the [first-time setup](#first-time-setup), then launch the interactive client:
+
+```sh
+git clone https://github.com/skylarkning/SkyCharts.git
+cd SkyCharts
+./tools/skycharts
+```
+
+Choose **1. Sign in / refresh planner authentication** and complete the normal Microsoft/Xbox sign-in in the browser window. The client stores the planner session privately under `work/`; never publish or commit that authentication file.
+
+Choose **2. Start Pack Agent for the iPad**, accept port `8770`, and leave the client running while the iPad downloads content. Only one Pack Agent can use a port at a time. If the client reports `Address already in use`, stop the existing agent with `Control-C` before starting another.
+
+### 2. Download charts from the iPad
+
+Tap the gear button in SkyCharts and choose one of these options:
+
+- **Download by Country** — enter a two-letter ISO 3166-1 code such as `CA`, `US`, `CN`, or `JP`.
+- **Download by ICAO Code** — enter one or more four-character airport codes separated by commas, such as `CYVR,CYYZ`.
+
+When prompted for the agent address, enter `http://MAC-LAN-IP:8770`, replacing `MAC-LAN-IP` with the Mac's address on the local network. SkyCharts displays build percentage, installation percentage, file count, and estimated remaining time. Keep the Mac agent running until the app reports that the chart pack is installed.
+
+### 3. Select an airport
+
+Tap the airport button at the upper-left corner, enter a downloaded ICAO code, and tap **Select**. SkyCharts loads the airport's available chart categories and remembers the selection for the next launch.
+
+If the app reports that an airport is not installed, download its country or request that ICAO code from the gear menu.
+
+### 4. Browse and view charts
+
+Use the vertical category selector on the left:
+
+- **STAR** — arrival procedures.
+- **SID** — departure procedures.
+- **APP** — instrument approach charts.
+- **TAXI** — airport, ground, parking, and taxi charts.
+- **MISC** — remaining provider charts and airport information.
+
+Tap a category to display its chart list, then tap a chart name to open it. Procedures with runway metadata are grouped beneath runway headers. Tap the currently selected category again to slide the chart list away and give the chart the full viewing area; tap it once more to reopen the list.
+
+Use two fingers to zoom and one finger to pan. Charts automatically refit and recenter after loading, rotating the iPad, or collapsing the list.
+
+### 5. Check METAR weather
+
+Tap **Wx** at the bottom-left. The weather window provides **Raw** and **Decoded** METAR views for the selected airport. Tap the refresh button to request the latest available observation. Weather requires an Internet connection even though installed charts work offline.
+
+### 6. Manage downloaded content
+
+Open the gear menu and choose **Manage Downloaded Content**. Expand the hierarchy:
+
+```text
+Continent → Country → State/Province/Region → City → Airport
+```
+
+Each level shows its unique chart storage. The summary at the top shows total SkyCharts storage and free space remaining on the iPad. Swipe an airport, city, subdivision, country, or continent to delete all charts beneath that level. Multi-airport packs are rewritten safely so unrelated airports remain installed.
+
+### 7. View application information
+
+Open the gear menu and choose **About SkyCharts** to see the installed version, build number, developer credit, copyright, and project disclaimer.
+
+## Screenshots
+
+<table>
+  <tr>
+    <td width="50%"><img src="docs/screenshots/chart-list.png" alt="STAR procedure list and chart"><br><strong>Procedure list</strong> — runway-aware chart browsing.</td>
+    <td width="50%"><img src="docs/screenshots/chart-fullscreen.png" alt="Full-screen arrival chart"><br><strong>Expanded chart</strong> — collapse the list for a larger viewing area.</td>
+  </tr>
+  <tr>
+    <td width="50%"><img src="docs/screenshots/airport-ground-chart.png" alt="Airport ground chart"><br><strong>Airport charts</strong> — ground and taxi charts under TAXI.</td>
+    <td width="50%"><img src="docs/screenshots/weather.png" alt="Decoded METAR weather window"><br><strong>METAR weather</strong> — raw and decoded observations.</td>
+  </tr>
+  <tr>
+    <td width="50%"><img src="docs/screenshots/downloaded-content.png" alt="Downloaded content storage manager"><br><strong>Downloaded content</strong> — geographic hierarchy and storage reporting.</td>
+    <td width="50%"><img src="docs/screenshots/about-skycharts.png" alt="About SkyCharts page"><br><strong>About SkyCharts</strong> — version and project information.</td>
+  </tr>
+</table>
 
 ## Repository layout
 
@@ -14,6 +112,7 @@ SkyCharts.plist           iOS application property list
 Makefile and control      Theos armv7/iOS 6 build configuration
 tools/                    Mac downloader, cache, pack agent, and CLI
 relay/                    Optional authenticated planner relay prototype
+docs/screenshots/         Application screenshots used by this README
 work/                     Cookies, jobs, cache, and generated packs (ignored)
 outputs/                  Local build artifacts (ignored)
 ```
@@ -23,7 +122,7 @@ outputs/                  Local build artifacts (ignored)
 On the Mac:
 
 - macOS with Xcode command-line tools
-- Theos at `/Users/skyning/theos` (or set `THEOS` elsewhere)
+- Theos, with `THEOS` pointing to its installation directory
 - Theos-compatible iOS 6 SDK and armv7 toolchain
 - Python 3
 - A signed-in Microsoft Flight Simulator planner account
@@ -40,8 +139,9 @@ The downloader requires planner authentication. The Mac client opens a dedicated
 ## First-time setup
 
 ```sh
-cd /Users/skyning/Documents/Codex/2026-07-11/i-a
-export THEOS=/Users/skyning/theos
+git clone https://github.com/skylarkning/SkyCharts.git
+cd SkyCharts
+export THEOS="$HOME/theos"
 chmod 700 tools/skycharts tools/*.py
 mkdir -p work
 chmod 700 work
@@ -76,7 +176,7 @@ HTTP 200 means the session is accepted. Renew the browser session and replace th
 ## Build the iOS 6 package
 
 ```sh
-export THEOS=/Users/skyning/theos
+export THEOS="$HOME/theos"
 make clean package
 ```
 
