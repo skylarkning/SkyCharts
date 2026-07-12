@@ -96,7 +96,7 @@ The iPad uses an old SSH server, so modern OpenSSH needs RSA compatibility flags
 
 ```sh
 IP=192.168.2.19
-DEB=packages/com.skyning.skycharts_0.10.5-1+debug_iphoneos-arm.deb
+DEB=packages/com.skyning.skycharts_0.10.6-1+debug_iphoneos-arm.deb
 
 scp -O -o StrictHostKeyChecking=no \
   -o HostKeyAlgorithms=+ssh-rsa \
@@ -190,11 +190,13 @@ Check it from the Mac:
 curl http://127.0.0.1:8770/health
 ```
 
-In SkyCharts, open the gear menu, choose a download option, and enter `http://MAC-LAN-IP:8770`. The app can request a country or comma-separated ICAO codes, polls the job, downloads light PNGs, and atomically installs the pack. Keep the agent running until installation completes.
+After upgrading the tools, stop any currently running agent with `Control-C` and start it again so Python loads the new protocol. The health response should include `"transfer":"ustar-v1"`.
+
+In SkyCharts, open the gear menu, choose a download option, and enter `http://MAC-LAN-IP:8770`. The app can request a country or comma-separated ICAO codes and polls the job. A completed job is packaged as one uncompressed USTAR stream; the app extracts that single HTTP transfer directly to temporary storage with bounded memory, validates `pack.json`, and atomically activates the pack. This avoids thousands of serial PNG requests. Keep the agent running until installation completes. SkyCharts retains the older per-file protocol only as a fallback for an agent that has not yet been restarted or upgraded.
 
 While a pack is being built, the footer shows overall completion percentage and an estimated remaining time. The estimate uses elapsed time plus global airport/chart progress and becomes more accurate after the first few charts complete. During the subsequent iPad transfer, the footer switches to file count, transfer percentage, and a separate transfer ETA.
 
-Large installations are streamed one chart file at a time with a per-file autorelease pool. Each PNG is released immediately after it is written, preventing the memory growth and crashes caused by retaining hundreds of downloaded chart images until the end of installation. Internal `@@SKYCHARTS_PROGRESS` telemetry is enabled only for Pack Agent subprocesses and is hidden from normal Mac-client output.
+Large installations are parsed incrementally from 512-byte TAR headers and written directly to their destination files. Each network callback uses a short-lived autorelease pool, no complete archive or PNG collection is retained in memory, and files are activated only after the transfer and manifest pass validation. Internal `@@SKYCHARTS_PROGRESS` telemetry is enabled only for Pack Agent subprocesses and is hidden from normal Mac-client output.
 
 ## Chart categories
 
@@ -217,6 +219,8 @@ The app includes iOS 6 icon assets at 57, 72, 114, and 144 pixels, generated fro
 ## METAR weather
 
 The beveled `Wx` button at the bottom of the category rail matches the airport selector and opens a compact iOS 6 weather window for the selected airport. It offers Raw and Decoded views plus manual refresh. Weather is read directly from the latest worldwide station files published by the U.S. National Weather Service over anonymous FTP, avoiding modern HTTPS requirements that iOS 6 cannot satisfy.
+
+The Settings menu includes **About SkyCharts**, an iOS 6-style page showing the app logo, installed version and build, developer credit, copyright, and project disclaimer.
 
 ## Optional legacy relay
 

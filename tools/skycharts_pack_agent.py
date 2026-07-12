@@ -7,6 +7,7 @@ import os
 import pathlib
 import re
 import subprocess
+import tarfile
 import threading
 import time
 import urllib.parse
@@ -19,7 +20,7 @@ LOCK = threading.Lock()
 
 
 def public_job(job):
-    result = {key: value for key, value in job.items() if key not in ("process", "directory", "logPath")}
+    result = {key: value for key, value in job.items() if key not in ("process", "directory", "logPath", "archivePath")}
     if result.get("progress", "").startswith("@@SKYCHARTS_PROGRESS"):
         result["progress"] = "Building chart pack…"
     return result
@@ -64,15 +65,50 @@ def watch_job(job_id):
     code = process.wait()
     with LOCK:
         job = JOBS[job_id]
-        if code == 0 and (job["directory"] / "pack.json").exists():
-            job["status"] = "ready"
-            job["manifest"] = "/packs/%s/pack.json" % job_id
-            job["fraction"] = 1.0
-            job["etaSeconds"] = 0
+        build_ok = code == 0 and (job["directory"] / "pack.json").exists()
+        if build_ok:
+            job["status"] = "packaging"
+            job["progress"] = "Packaging one-stream transfer…"
+            job["fraction"] = 0.99
+            job.pop("etaSeconds", None)
         else:
             job["status"] = "failed"
             job["error"] = readable_failure(job["logPath"])
-        job["finishedAt"] = time.time()
+            job["finishedAt"] = time.time()
+    if not build_ok:
+        return
+    try:
+        archive_path, archive_files = build_archive(job_id, job["directory"])
+        archive_size = archive_path.stat().st_size
+        with LOCK:
+            job = JOBS[job_id]
+            job["status"] = "ready"
+            job["manifest"] = "/packs/%s/pack.json" % job_id
+            job["archive"] = "/packs/%s/pack.tar" % job_id
+            job["archivePath"] = archive_path
+            job["archiveBytes"] = archive_size
+            job["archiveFiles"] = archive_files
+            job["fraction"] = 1.0
+            job["etaSeconds"] = 0
+            job["finishedAt"] = time.time()
+    except Exception as error:
+        with LOCK:
+            job = JOBS[job_id]
+            job["status"] = "failed"
+            job["error"] = "Could not package chart transfer: %s" % error
+            job["finishedAt"] = time.time()
+
+
+def build_archive(job_id, directory):
+    archive_path = directory.parent / (job_id + ".tar")
+    temporary = archive_path.with_suffix(".tar.part")
+    files = [path for path in directory.rglob("*") if path.is_file()]
+    files.sort(key=lambda path: (path.name != "pack.json", path.relative_to(directory).as_posix()))
+    with tarfile.open(temporary, "w", format=tarfile.USTAR_FORMAT) as archive:
+        for path in files:
+            archive.add(path, arcname=path.relative_to(directory).as_posix(), recursive=False)
+    temporary.replace(archive_path)
+    return archive_path, len(files)
 
 
 def readable_failure(log_path):
@@ -149,12 +185,24 @@ class Handler(BaseHTTPRequestHandler):
     def send_json(self, status, value):
         self.send_bytes(status, "application/json", json.dumps(value, separators=(",", ":")).encode())
 
+    def send_file(self, target, content_type):
+        self.send_response(200)
+        self.send_header("Content-Type", content_type)
+        self.send_header("Content-Length", str(target.stat().st_size))
+        self.end_headers()
+        with target.open("rb") as handle:
+            while True:
+                chunk = handle.read(256 * 1024)
+                if not chunk:
+                    break
+                self.wfile.write(chunk)
+
     def do_GET(self):
         parsed = urllib.parse.urlparse(self.path)
         parts = parsed.path.strip("/").split("/")
         try:
             if parsed.path == "/health":
-                self.send_json(200, {"ok": True, "service": "SkyCharts Pack Agent"})
+                self.send_json(200, {"ok": True, "service": "SkyCharts Pack Agent", "transfer": "ustar-v1"})
                 return
             if parsed.path == "/api/build":
                 query = urllib.parse.parse_qs(parsed.query)
@@ -178,6 +226,13 @@ class Handler(BaseHTTPRequestHandler):
                     job = JOBS.get(parts[1])
                 if not job or job["status"] != "ready":
                     self.send_json(404, {"error": "pack not ready"})
+                    return
+                if len(parts) == 3 and parts[2] == "pack.tar":
+                    target = job.get("archivePath")
+                    if not target or not target.is_file():
+                        self.send_json(404, {"error": "archive not found"})
+                        return
+                    self.send_file(target, "application/x-tar")
                     return
                 relative = pathlib.Path(*parts[2:])
                 target = (job["directory"] / relative).resolve()
