@@ -17,4 +17,5 @@ DerivedData/
 # Python bytecode and local tooling state
 __pycache__/
 *.py[cod]
+.venv/
 .DS_Store

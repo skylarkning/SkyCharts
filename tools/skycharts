@@ -1,4 +1,9 @@
 #!/bin/sh
 set -eu
 SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
-exec python3 "$SCRIPT_DIR/skycharts_cli.py" "$@"
+PROJECT_DIR=$(dirname -- "$SCRIPT_DIR")
+PYTHON="$PROJECT_DIR/.venv/bin/python3"
+if [ ! -x "$PYTHON" ]; then
+  PYTHON=python3
+fi
+exec "$PYTHON" "$SCRIPT_DIR/skycharts_cli.py" "$@"

@@ -45,8 +45,9 @@ export THEOS=/Users/skyning/theos
 chmod 700 tools/skycharts tools/*.py
 mkdir -p work
 chmod 700 work
-python3 -m pip install --user playwright
-python3 -m playwright install chromium
+python3 -m venv .venv
+.venv/bin/python3 -m pip install playwright
+.venv/bin/python3 -m playwright install chromium
 ./tools/skycharts
 ```
 
@@ -228,7 +229,7 @@ See [relay/README.md](relay/README.md) for endpoints. Never commit cookies, sign
 ## Troubleshooting
 
 - **401/403 from planner:** choose **Sign in / refresh planner authentication** in `./tools/skycharts`.
-- **Browser login dependency missing:** run `python3 -m pip install --user playwright` followed by `python3 -m playwright install chromium`.
+- **Browser login dependency missing:** run `python3 -m venv .venv`, `.venv/bin/python3 -m pip install playwright`, and `.venv/bin/python3 -m playwright install chromium`. The launcher automatically uses this isolated environment.
 - **Weather unavailable:** confirm the iPad has Internet access. Some airports do not publish METAR reports, and the NWS station may temporarily be unavailable.
 - **Pack build failed:** inspect terminal output and `work/pack-agent/*.log`; check cookie, Internet access, and planner availability.
 - **Pack transfer failed:** verify the iPad and Mac are on the same LAN, port 8770 is reachable, and iPad storage is available. Cached assets make retries faster.

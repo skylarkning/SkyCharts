@@ -17,8 +17,9 @@ def browser_login(cookie_file, timeout=900):
         from playwright.sync_api import sync_playwright
     except ImportError:
         print("Browser login needs Playwright. Install it once with:")
-        print("  python3 -m pip install --user playwright")
-        print("  python3 -m playwright install chromium")
+        print("  python3 -m venv .venv")
+        print("  .venv/bin/python3 -m pip install playwright")
+        print("  .venv/bin/python3 -m playwright install chromium")
         return False
 
     cookie_file = pathlib.Path(cookie_file).expanduser().resolve()
@@ -58,7 +59,7 @@ def browser_login(cookie_file, timeout=900):
         message = str(error)
         if "Executable doesn't exist" in message:
             print("Playwright Chromium is not installed. Run:")
-            print("  python3 -m playwright install chromium")
+            print("  .venv/bin/python3 -m playwright install chromium")
         else:
             print("Browser login failed: %s" % message)
         return False
