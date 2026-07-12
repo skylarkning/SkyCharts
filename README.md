@@ -196,7 +196,7 @@ The iPad uses an old SSH server, so modern OpenSSH needs RSA compatibility flags
 
 ```sh
 IP=192.168.2.19
-DEB=packages/com.skyning.skycharts_0.10.7-1+debug_iphoneos-arm.deb
+DEB=packages/com.skyning.skycharts_0.10.8-1+debug_iphoneos-arm.deb
 
 scp -O -o StrictHostKeyChecking=no \
   -o HostKeyAlgorithms=+ssh-rsa \
@@ -310,7 +310,7 @@ TAXI        AGC, APC, AFC, LVC, ADC, APT
 MISC        Any remaining provider type, including AOI
 ```
 
-The five controls sit inside a long dark vertical pill with protected space above STAR and below MISC, so the active orange selector remains fully visible at both ends. Tapping the selected category hides or reveals the chart list with a smooth leftward slide and fade while the chart viewer resizes. Within a section, runway charts are grouped under headers such as `RWY 10L` and `RWY 19R`; charts without runway metadata appear under `GENERAL`.
+The five controls sit inside a long dark vertical pill with protected space above STAR and below MISC, so the active orange selector remains fully visible at both ends. Tapping the selected category hides or reveals the chart list with a smooth leftward slide and fade while the chart viewer resizes. Every chart row carries a color-coded vertical stripe labeled with its exact LIDO type, including SID, SIDPT, STAR, STARPT, IAC, AGC, APC, AFC, LVC, MRC, and AOI. Within a section, runway charts are grouped under headers such as `RWY 10L` and `RWY 19R`; charts without runway metadata appear under `GENERAL`.
 
 Downloaded content is managed entirely through a collapsible location hierarchy: continent → ISO 3166-1 country → ISO 3166-2 state/province/region → city → airport. Every row reports the unique installed chart size beneath that branch. A storage summary above the hierarchy shows total SkyCharts disk usage and currently available iPad space. Swipe any level to delete all matching charts; airport- and city-level deletion rewrites multi-airport manifests and removes only assets no longer referenced, while an emptied package directory is removed automatically.
 
