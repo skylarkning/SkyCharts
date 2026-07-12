@@ -7,6 +7,8 @@ import pathlib
 import subprocess
 import sys
 
+from skycharts_auth import browser_login
+
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 PYTHON = sys.executable
 
@@ -54,28 +56,41 @@ def cache_status():
     print()
 
 
+def ensure_cookie(cookie):
+    path = pathlib.Path(cookie)
+    if path.is_file() and path.stat().st_size:
+        return True
+    print("\nNo saved planner authentication was found. Starting browser login…\n")
+    return browser_login(path)
+
+
 def interactive():
     cookie = str(ROOT / "work" / "msfs-cookie.txt")
     while True:
         print("""
 SkyCharts Mac Client
 ===================
-1. Start Pack Agent for the iPad
-2. Download a country pack on this Mac
-3. Download selected airports
-4. Install an existing pack over SSH
-5. Show reusable cache status
+1. Sign in / refresh planner authentication
+2. Start Pack Agent for the iPad
+3. Download a country pack on this Mac
+4. Download selected airports
+5. Install an existing pack over SSH
+6. Show reusable cache status
 0. Quit
 """)
         choice = input("Choose an option: ").strip()
         if choice == "0":
             return 0
         if choice == "1":
-            cookie = ask("Cookie file", cookie)
+            browser_login(cookie)
+        elif choice == "2":
+            if not ensure_cookie(cookie):
+                continue
             port = int(ask("Agent port", "8770"))
             agent(cookie, port)
-        elif choice == "2":
-            cookie = ask("Cookie file", cookie)
+        elif choice == "3":
+            if not ensure_cookie(cookie):
+                continue
             code = ask("Two-letter country code", "CA").upper()
             pack_id = ask("Package ID", code.lower())
             name = ask("Display name", code + " Charts")
@@ -83,19 +98,20 @@ SkyCharts Mac Client
             limit_text = ask("Maximum airports (blank means all)", "")
             workers = int(ask("Parallel chart workers", "8"))
             country(cookie, code, output, name, pack_id, int(limit_text) if limit_text else None, workers)
-        elif choice == "3":
-            cookie = ask("Cookie file", cookie)
+        elif choice == "4":
+            if not ensure_cookie(cookie):
+                continue
             idents = ask("Airport codes separated by spaces", "KJFK").split()
             pack_id = ask("Package ID", "custom-airports")
             name = ask("Display name", "Custom Airports")
             output = ask("Output directory", str(ROOT / "outputs" / pack_id))
             workers = int(ask("Parallel chart workers", "8"))
             airports(cookie, idents, output, name, pack_id, workers)
-        elif choice == "4":
+        elif choice == "5":
             pack = ask("Pack directory", str(ROOT / "outputs"))
             host = ask("iPad IP address", "192.168.2.19")
             install(pack, host)
-        elif choice == "5":
+        elif choice == "6":
             cache_status()
         else:
             print("Unknown option.")

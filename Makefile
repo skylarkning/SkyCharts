@@ -5,7 +5,7 @@ include $(THEOS)/makefiles/common.mk
 
 APPLICATION_NAME = SkyCharts
 
-SkyCharts_FILES = SkyCharts/main.m SkyCharts/AppDelegate.m SkyCharts/ChartViewController.m SkyCharts/ContentManagerViewController.m SkyCharts/Compat.c
+SkyCharts_FILES = SkyCharts/main.m SkyCharts/AppDelegate.m SkyCharts/ChartViewController.m SkyCharts/ContentManagerViewController.m SkyCharts/WeatherViewController.m SkyCharts/Compat.c
 SkyCharts_FRAMEWORKS = UIKit Foundation CoreGraphics QuartzCore Security
 SkyCharts_CFLAGS = -fno-objc-arc -Wno-deprecated-declarations -fmodules-cache-path=$(THEOS_PROJECT_DIR)/.theos/module-cache
 SkyCharts_USE_MODULES = 0

@@ -35,7 +35,7 @@ On the iPad:
 - SSH access as `root`
 - Its LAN address, for example `192.168.2.19`
 
-The downloader requires a current private `Cookie` request-header value. Treat it as a password: never commit it, paste it into source code, or publish it.
+The downloader requires planner authentication. The Mac client opens a dedicated Chromium window, lets the user complete the normal Microsoft/Xbox login, detects the planner's `ApiToken`, and saves the Cookie header privately. Treat the saved file as a password: never commit or publish it.
 
 ## First-time setup
 
@@ -45,11 +45,20 @@ export THEOS=/Users/skyning/theos
 chmod 700 tools/skycharts tools/*.py
 mkdir -p work
 chmod 700 work
-${EDITOR:-vi} work/msfs-cookie.txt
-chmod 600 work/msfs-cookie.txt
+python3 -m pip install --user playwright
+python3 -m playwright install chromium
+./tools/skycharts
 ```
 
-Copy the complete `Cookie` request-header value from a successful signed-in planner `/api/v1/charts/...` request. The file should contain one line such as `ApiToken=...`; do not include a `Cookie:` prefix or shell quotes.
+Choose **Sign in / refresh planner authentication**. Complete the Microsoft/Xbox login in the browser window; the client automatically writes `work/msfs-cookie.txt` with mode `0600`. Its persistent browser profile is stored under ignored `work/` data, so later refreshes normally reuse the existing Microsoft session.
+
+The browser flow can also be run directly:
+
+```sh
+python3 tools/skycharts_auth.py
+```
+
+If browser automation cannot be installed, the previous manual Cookie-header method remains a fallback: put the complete header value on one line in `work/msfs-cookie.txt` and run `chmod 600 work/msfs-cookie.txt`.
 
 Validate the session without downloading a chart:
 
@@ -86,7 +95,7 @@ The iPad uses an old SSH server, so modern OpenSSH needs RSA compatibility flags
 
 ```sh
 IP=192.168.2.19
-DEB=packages/com.skyning.skycharts_0.9.0-1+debug_iphoneos-arm.deb
+DEB=packages/com.skyning.skycharts_0.10.0-1+debug_iphoneos-arm.deb
 
 scp -O -o StrictHostKeyChecking=no \
   -o HostKeyAlgorithms=+ssh-rsa \
@@ -163,7 +172,7 @@ The installer stages into a temporary directory, validates `pack.json`, and atom
 ./tools/skycharts
 ```
 
-The menu starts the Pack Agent, builds country or selected-airport packs, installs packs over SSH, and reports cache status. It is a guided wrapper around the Python commands.
+The menu handles browser authentication, starts the Pack Agent, builds country or selected-airport packs, installs packs over SSH, and reports cache status. If no cookie file exists, authenticated operations automatically offer browser login.
 
 ## In-app downloads through Pack Agent
 
@@ -194,11 +203,15 @@ TAXI        AGC, APC, AFC, LVC, ADC, APT
 MISC        Any remaining provider type, including AOI
 ```
 
-Within a section, runway charts are grouped under headers such as `RWY 10L` and `RWY 19R`; charts without runway metadata appear under `GENERAL`. SID and STAR rows highlight the actual procedure name or designator in amber for faster scanning.
+Within a section, runway charts are grouped under headers such as `RWY 10L` and `RWY 19R`; charts without runway metadata appear under `GENERAL`.
 
 Downloaded content is presented as a collapsible location hierarchy: continent → country → state/province/region → city. Airport totals appear at the city level instead of listing every airport as a separate row. Pack deletion remains available under the collapsible **Installed Packages** branch.
 
 The app includes iOS 6 icon assets at 57, 72, 114, and 144 pixels, generated from `SkyCharts/Resources/SkyChartsIcon-1024.png` with transparent outer corners and prerendered artwork.
+
+## METAR weather
+
+The `Wx` button at the bottom of the category rail opens a compact iOS 6 weather window for the selected airport. It offers Raw and Decoded views plus manual refresh. Weather is read directly from the latest worldwide station files published by the U.S. National Weather Service over anonymous FTP, avoiding modern HTTPS requirements that iOS 6 cannot satisfy.
 
 ## Optional legacy relay
 
@@ -214,7 +227,9 @@ See [relay/README.md](relay/README.md) for endpoints. Never commit cookies, sign
 
 ## Troubleshooting
 
-- **401/403 from planner:** renew the signed-in browser cookie and replace `work/msfs-cookie.txt`.
+- **401/403 from planner:** choose **Sign in / refresh planner authentication** in `./tools/skycharts`.
+- **Browser login dependency missing:** run `python3 -m pip install --user playwright` followed by `python3 -m playwright install chromium`.
+- **Weather unavailable:** confirm the iPad has Internet access. Some airports do not publish METAR reports, and the NWS station may temporarily be unavailable.
 - **Pack build failed:** inspect terminal output and `work/pack-agent/*.log`; check cookie, Internet access, and planner availability.
 - **Pack transfer failed:** verify the iPad and Mac are on the same LAN, port 8770 is reachable, and iPad storage is available. Cached assets make retries faster.
 - **`uicache` cache-file error:** run it as `mobile` and respring SpringBoard using the commands above.
