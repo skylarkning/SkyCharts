@@ -23,6 +23,7 @@ AIRPORTS_CSV = "https://davidmegginson.github.io/ourairports-data/airports.csv"
 COUNTRIES_CSV = "https://davidmegginson.github.io/ourairports-data/countries.csv"
 REGIONS_CSV = "https://davidmegginson.github.io/ourairports-data/regions.csv"
 CONTINENT_NAMES = {"AF": "Africa", "AN": "Antarctica", "AS": "Asia", "EU": "Europe", "NA": "North America", "OC": "Oceania", "SA": "South America"}
+MACHINE_PROGRESS = os.environ.get("SKYCHARTS_MACHINE_PROGRESS") == "1"
 
 
 def safe_name(value):
@@ -126,6 +127,8 @@ def download_chart(metadata, destination, cache_dir, sas, include_dark):
 
 
 def emit_progress(airport_number, total_airports, completed=0, total_charts=1):
+    if not MACHINE_PROGRESS:
+        return
     chart_fraction = float(completed) / max(1, total_charts)
     overall = ((airport_number - 1) + chart_fraction) / max(1, total_airports)
     print("@@SKYCHARTS_PROGRESS %.6f" % min(1.0, max(0.0, overall)), flush=True)

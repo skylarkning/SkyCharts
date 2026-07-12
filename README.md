@@ -96,7 +96,7 @@ The iPad uses an old SSH server, so modern OpenSSH needs RSA compatibility flags
 
 ```sh
 IP=192.168.2.19
-DEB=packages/com.skyning.skycharts_0.10.2-1+debug_iphoneos-arm.deb
+DEB=packages/com.skyning.skycharts_0.10.3-1+debug_iphoneos-arm.deb
 
 scp -O -o StrictHostKeyChecking=no \
   -o HostKeyAlgorithms=+ssh-rsa \
@@ -192,7 +192,9 @@ curl http://127.0.0.1:8770/health
 
 In SkyCharts, open the gear menu, choose a download option, and enter `http://MAC-LAN-IP:8770`. The app can request a country or comma-separated ICAO codes, polls the job, downloads light PNGs, and atomically installs the pack. Keep the agent running until installation completes.
 
-While a pack is being built, the footer shows overall completion percentage and an estimated remaining time. The estimate uses elapsed time plus global airport/chart progress and becomes more accurate after the first few charts complete.
+While a pack is being built, the footer shows overall completion percentage and an estimated remaining time. The estimate uses elapsed time plus global airport/chart progress and becomes more accurate after the first few charts complete. During the subsequent iPad transfer, the footer switches to file count, transfer percentage, and a separate transfer ETA.
+
+Large installations are streamed one chart file at a time with a per-file autorelease pool. Each PNG is released immediately after it is written, preventing the memory growth and crashes caused by retaining hundreds of downloaded chart images until the end of installation. Internal `@@SKYCHARTS_PROGRESS` telemetry is enabled only for Pack Agent subprocesses and is hidden from normal Mac-client output.
 
 ## Chart categories
 

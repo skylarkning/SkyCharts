@@ -3,6 +3,7 @@
 
 import argparse
 import json
+import os
 import pathlib
 import re
 import subprocess
@@ -18,7 +19,10 @@ LOCK = threading.Lock()
 
 
 def public_job(job):
-    return {key: value for key, value in job.items() if key not in ("process", "directory", "logPath")}
+    result = {key: value for key, value in job.items() if key not in ("process", "directory", "logPath")}
+    if result.get("progress", "").startswith("@@SKYCHARTS_PROGRESS"):
+        result["progress"] = "Building chart pack…"
+    return result
 
 
 def estimate_eta(created_at, fraction, now=None):
@@ -92,7 +96,9 @@ def spawn_job(job_id, command, metadata):
     directory = ROOT / "work" / "pack-agent" / job_id
     directory.parent.mkdir(parents=True, exist_ok=True)
     log_path = directory.parent / (job_id + ".log")
-    process = subprocess.Popen(command, cwd=str(ROOT), stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1)
+    environment = dict(os.environ)
+    environment["SKYCHARTS_MACHINE_PROGRESS"] = "1"
+    process = subprocess.Popen(command, cwd=str(ROOT), env=environment, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1)
     job = {"id": job_id, "status": "building", "progress": "Starting downloader…", "fraction": 0.0, "createdAt": time.time(), "directory": directory, "process": process, "logPath": log_path}
     job.update(metadata)
     with LOCK:
