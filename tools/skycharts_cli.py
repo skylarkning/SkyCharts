@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Friendly interactive launcher for AtlasSix Mac tools."""
+"""Friendly interactive launcher for SkyCharts Mac tools."""
 
 import argparse
 import json
@@ -23,22 +23,22 @@ def run(command):
 
 
 def agent(cookie, port):
-    return run([PYTHON, ROOT / "tools" / "atlassix_pack_agent.py", "--cookie-file", cookie, "--port", str(port)])
+    return run([PYTHON, ROOT / "tools" / "skycharts_pack_agent.py", "--cookie-file", cookie, "--port", str(port)])
 
 
 def country(cookie, code, output, name, pack_id, limit, workers):
-    command = [PYTHON, ROOT / "tools" / "atlassix_downloader.py", "country", code.upper(), "--cookie-file", cookie, "--pack-id", pack_id, "--name", name, "--output", output, "--workers", str(workers)]
+    command = [PYTHON, ROOT / "tools" / "skycharts_downloader.py", "country", code.upper(), "--cookie-file", cookie, "--pack-id", pack_id, "--name", name, "--output", output, "--workers", str(workers)]
     if limit:
         command += ["--limit", str(limit)]
     return run(command)
 
 
 def airports(cookie, idents, output, name, pack_id, workers):
-    return run([PYTHON, ROOT / "tools" / "atlassix_downloader.py", "airport"] + [item.upper() for item in idents] + ["--cookie-file", cookie, "--pack-id", pack_id, "--name", name, "--output", output, "--workers", str(workers)])
+    return run([PYTHON, ROOT / "tools" / "skycharts_downloader.py", "airport"] + [item.upper() for item in idents] + ["--cookie-file", cookie, "--pack-id", pack_id, "--name", name, "--output", output, "--workers", str(workers)])
 
 
 def install(pack, host):
-    return run([PYTHON, ROOT / "tools" / "atlassix_downloader.py", "install", pack, "--host", host])
+    return run([PYTHON, ROOT / "tools" / "skycharts_downloader.py", "install", pack, "--host", host])
 
 
 def cache_status():
@@ -58,7 +58,7 @@ def interactive():
     cookie = str(ROOT / "work" / "msfs-cookie.txt")
     while True:
         print("""
-AtlasSix Mac Client
+SkyCharts Mac Client
 ===================
 1. Start Pack Agent for the iPad
 2. Download a country pack on this Mac
@@ -102,7 +102,7 @@ AtlasSix Mac Client
 
 
 def main():
-    parser = argparse.ArgumentParser(description="AtlasSix Mac Client")
+    parser = argparse.ArgumentParser(description="SkyCharts Mac Client")
     parser.add_argument("--menu", action="store_true", help="open the interactive menu")
     args = parser.parse_args()
     return interactive()

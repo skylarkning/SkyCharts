@@ -1,16 +1,16 @@
-# AtlasSix
+# SkyCharts
 
-AtlasSix is a native UIKit chart viewer for jailbroken iPads running iOS 6. It presents Microsoft Flight Simulator 2024 LIDO charts in a Jeppesen-inspired interface and is designed to work offline after chart packs have been installed.
+SkyCharts is a native UIKit chart viewer for jailbroken iPads running iOS 6. It presents Microsoft Flight Simulator 2024 LIDO charts in a Jeppesen-inspired interface and is designed to work offline after chart packs have been installed.
 
-The app does not contain an Xbox login, planner cookie, relay, or web browser. A Mac downloads authorized chart assets from the planner, builds a local pack, and transfers that pack to the iPad. The app reads packs from `/var/mobile/Library/AtlasSix/ChartPacks`.
+The app does not contain an Xbox login, planner cookie, relay, or web browser. A Mac downloads authorized chart assets from the planner, builds a local pack, and transfers that pack to the iPad. The app reads packs from `/var/mobile/Library/SkyCharts/ChartPacks`. Version 0.8 automatically migrates packs and preferences from an existing AtlasSix installation.
 
 The earlier `relay/` service remains as an optional compatibility prototype; it is not required for the offline workflow.
 
 ## Repository layout
 
 ```text
-AtlasSix/                 Objective-C UIKit application
-AtlasSix.plist            iOS application property list
+SkyCharts/                Objective-C UIKit application
+SkyCharts.plist           iOS application property list
 Makefile and control      Theos armv7/iOS 6 build configuration
 tools/                    Mac downloader, cache, pack agent, and CLI
 relay/                    Optional authenticated planner relay prototype
@@ -42,7 +42,7 @@ The downloader requires a current private `Cookie` request-header value. Treat i
 ```sh
 cd /Users/skyning/Documents/Codex/2026-07-11/i-a
 export THEOS=/Users/skyning/theos
-chmod 700 tools/atlassix tools/*.py
+chmod 700 tools/skycharts tools/*.py
 mkdir -p work
 chmod 700 work
 ${EDITOR:-vi} work/msfs-cookie.txt
@@ -74,8 +74,8 @@ The package is written to `packages/`. To keep a convenient local copy:
 
 ```sh
 mkdir -p outputs
-cp packages/com.skyning.atlassix_*_iphoneos-arm.deb \
-  outputs/AtlasSix-ios6-armv7.deb
+cp packages/com.skyning.skycharts_*_iphoneos-arm.deb \
+  outputs/SkyCharts-ios6-armv7.deb
 ```
 
 The Makefile targets `iphone:clang:10.3:6.0` and `armv7`.
@@ -86,17 +86,17 @@ The iPad uses an old SSH server, so modern OpenSSH needs RSA compatibility flags
 
 ```sh
 IP=192.168.2.19
-DEB=packages/com.skyning.atlassix_0.7.2-1+debug_iphoneos-arm.deb
+DEB=packages/com.skyning.skycharts_0.8.0-1+debug_iphoneos-arm.deb
 
 scp -O -o StrictHostKeyChecking=no \
   -o HostKeyAlgorithms=+ssh-rsa \
   -o PubkeyAcceptedAlgorithms=+ssh-rsa \
-  "$DEB" root@$IP:/tmp/AtlasSix.deb
+  "$DEB" root@$IP:/tmp/SkyCharts.deb
 
 ssh -o StrictHostKeyChecking=no \
   -o HostKeyAlgorithms=+ssh-rsa \
   -o PubkeyAcceptedAlgorithms=+ssh-rsa \
-  root@$IP 'dpkg -i /tmp/AtlasSix.deb'
+  root@$IP 'dpkg -i /tmp/SkyCharts.deb'
 ```
 
 The default password on many test jailbreaks is `alpine`; change it on a real device.
@@ -105,7 +105,7 @@ Restart the app:
 
 ```sh
 ssh -o HostKeyAlgorithms=+ssh-rsa -o PubkeyAcceptedAlgorithms=+ssh-rsa \
-  root@$IP 'killall AtlasSix 2>/dev/null || true'
+  root@$IP 'killall SkyCharts 2>/dev/null || true'
 ```
 
 Refresh the icon cache:
@@ -131,7 +131,7 @@ The downloader keeps reusable assets in `work/chart-cache`. Rebuilding a pack re
 Selected airports:
 
 ```sh
-python3 tools/atlassix_downloader.py airport KJFK KLGA \
+python3 tools/skycharts_downloader.py airport KJFK KLGA \
   --cookie-file work/msfs-cookie.txt \
   --pack-id new-york-demo --name "New York Demo" \
   --output outputs/new-york-demo --workers 8
@@ -140,7 +140,7 @@ python3 tools/atlassix_downloader.py airport KJFK KLGA \
 Country pack:
 
 ```sh
-python3 tools/atlassix_downloader.py country CA \
+python3 tools/skycharts_downloader.py country CA \
   --cookie-file work/msfs-cookie.txt \
   --pack-id canada --name "Canada" \
   --output outputs/canada --workers 8
@@ -151,7 +151,7 @@ Useful options are `--limit 10` for a trial, `--workers 16` for more concurrency
 Install an existing pack directly over SSH:
 
 ```sh
-python3 tools/atlassix_downloader.py install \
+python3 tools/skycharts_downloader.py install \
   outputs/new-york-demo --host 192.168.2.19
 ```
 
@@ -160,7 +160,7 @@ The installer stages into a temporary directory, validates `pack.json`, and atom
 ## Interactive Mac client
 
 ```sh
-./tools/atlassix
+./tools/skycharts
 ```
 
 The menu starts the Pack Agent, builds country or selected-airport packs, installs packs over SSH, and reports cache status. It is a guided wrapper around the Python commands.
@@ -170,7 +170,7 @@ The menu starts the Pack Agent, builds country or selected-airport packs, instal
 Start the LAN agent:
 
 ```sh
-python3 tools/atlassix_pack_agent.py \
+python3 tools/skycharts_pack_agent.py \
   --cookie-file work/msfs-cookie.txt --host 0.0.0.0 --port 8770
 ```
 
@@ -180,7 +180,7 @@ Check it from the Mac:
 curl http://127.0.0.1:8770/health
 ```
 
-In AtlasSix, open the gear menu, choose a download option, and enter `http://MAC-LAN-IP:8770`. The app can request a country or comma-separated ICAO codes, polls the job, downloads light PNGs, and atomically installs the pack. Keep the agent running until installation completes.
+In SkyCharts, open the gear menu, choose a download option, and enter `http://MAC-LAN-IP:8770`. The app can request a country or comma-separated ICAO codes, polls the job, downloads light PNGs, and atomically installs the pack. Keep the agent running until installation completes.
 
 ## Chart categories
 
@@ -224,21 +224,21 @@ Generated credentials, packs, caches, build products, and Python bytecode are ex
 git init
 git add .
 git status
-git commit -m "Initial AtlasSix iOS 6 offline chart viewer"
+git commit -m "Initial SkyCharts iOS 6 offline chart viewer"
 ```
 
-Create an empty private repository on GitHub, then add its URL and push:
+The canonical repository is `skylarkning/SkyCharts`. Add its URL and push:
 
 ```sh
 git branch -M main
-git remote add origin git@github.com:YOUR_ACCOUNT/YOUR_REPOSITORY.git
+git remote add origin git@github.com:skylarkning/SkyCharts.git
 git push -u origin main
 ```
 
 HTTPS alternative:
 
 ```sh
-git remote add origin https://github.com/YOUR_ACCOUNT/YOUR_REPOSITORY.git
+git remote add origin https://github.com/skylarkning/SkyCharts.git
 git push -u origin main
 ```
 

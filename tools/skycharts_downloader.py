@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build and install offline AtlasSix chart packs."""
+"""Build and install offline SkyCharts chart packs."""
 
 import argparse
 import csv
@@ -221,7 +221,7 @@ def build_pack(args, airport_records, country=None):
     seeded = seed_cache_from_pack(output, cache_dir) if output.exists() else 0
     if seeded:
         print("Seeded reusable cache from %d existing charts" % seeded)
-    temp = pathlib.Path(tempfile.mkdtemp(prefix="atlassix-pack-", dir=str(output.parent)))
+    temp = pathlib.Path(tempfile.mkdtemp(prefix="skycharts-pack-", dir=str(output.parent)))
     airports = []
     try:
         total = len(airport_records)
@@ -268,7 +268,7 @@ def install_pack(args):
     if not (source / "pack.json").exists():
         raise SystemExit("pack.json not found")
     pack_id = json.loads((source / "pack.json").read_text())["packId"]
-    remote_root = "/var/mobile/Library/AtlasSix/ChartPacks"
+    remote_root = "/var/mobile/Library/SkyCharts/ChartPacks"
     ssh_options = ["-oHostKeyAlgorithms=+ssh-rsa", "-oPubkeyAcceptedAlgorithms=+ssh-rsa"]
     subprocess.check_call(["ssh", "-tt"] + ssh_options + ["root@" + args.host, "mkdir -p %s" % remote_root])
     subprocess.check_call(["scp", "-O", "-r"] + ssh_options + [str(source), "root@%s:%s/%s" % (args.host, remote_root, pack_id)])
@@ -277,7 +277,7 @@ def install_pack(args):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Build AtlasSix offline chart packs")
+    parser = argparse.ArgumentParser(description="Build SkyCharts offline chart packs")
     sub = parser.add_subparsers(dest="command", required=True)
     common = argparse.ArgumentParser(add_help=False)
     common.add_argument("--cookie-file", required=True)

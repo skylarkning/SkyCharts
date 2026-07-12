@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""LAN download appliance for AtlasSix country chart packs."""
+"""LAN download appliance for SkyCharts country chart packs."""
 
 import argparse
 import json
@@ -84,7 +84,7 @@ def start_job(country, limit=None):
     job_id = "%s-%s" % (country.lower(), uuid.uuid4().hex[:8])
     directory = ROOT / "work" / "pack-agent" / job_id
     command = [
-        "python3", str(ROOT / "tools" / "atlassix_downloader.py"), "country", country,
+        "python3", str(ROOT / "tools" / "skycharts_downloader.py"), "country", country,
         "--cookie-file", str(ARGS.cookie_file), "--pack-id", job_id,
         "--name", "%s Charts" % country, "--output", str(directory),
     ]
@@ -100,7 +100,7 @@ def start_airport_job(idents):
     job_id = "airports-%s" % uuid.uuid4().hex[:8]
     directory = ROOT / "work" / "pack-agent" / job_id
     command = [
-        "python3", str(ROOT / "tools" / "atlassix_downloader.py"), "airport",
+        "python3", str(ROOT / "tools" / "skycharts_downloader.py"), "airport",
     ] + values + [
         "--cookie-file", str(ARGS.cookie_file), "--pack-id", job_id,
         "--name", "Airport Charts", "--output", str(directory),
@@ -124,7 +124,7 @@ class Handler(BaseHTTPRequestHandler):
         parts = parsed.path.strip("/").split("/")
         try:
             if parsed.path == "/health":
-                self.send_json(200, {"ok": True, "service": "AtlasSix Pack Agent"})
+                self.send_json(200, {"ok": True, "service": "SkyCharts Pack Agent"})
                 return
             if parsed.path == "/api/build":
                 query = urllib.parse.parse_qs(parsed.query)
@@ -170,12 +170,12 @@ class Handler(BaseHTTPRequestHandler):
 
 def main():
     global ARGS
-    parser = argparse.ArgumentParser(description="AtlasSix LAN chart-pack agent")
+    parser = argparse.ArgumentParser(description="SkyCharts LAN chart-pack agent")
     parser.add_argument("--cookie-file", required=True, type=pathlib.Path)
     parser.add_argument("--host", default="0.0.0.0")
     parser.add_argument("--port", default=8770, type=int)
     ARGS = parser.parse_args()
-    print("AtlasSix Pack Agent listening on http://%s:%d" % (ARGS.host, ARGS.port))
+    print("SkyCharts Pack Agent listening on http://%s:%d" % (ARGS.host, ARGS.port))
     ThreadingHTTPServer((ARGS.host, ARGS.port), Handler).serve_forever()
 
 
