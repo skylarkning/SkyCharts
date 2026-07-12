@@ -20,10 +20,23 @@ sys.path.insert(0, str(ROOT / "relay"))
 import msfs_chart_relay as planner  # noqa: E402
 
 AIRPORTS_CSV = "https://davidmegginson.github.io/ourairports-data/airports.csv"
+COUNTRIES_CSV = "https://davidmegginson.github.io/ourairports-data/countries.csv"
+REGIONS_CSV = "https://davidmegginson.github.io/ourairports-data/regions.csv"
+CONTINENT_NAMES = {"AF": "Africa", "AN": "Antarctica", "AS": "Asia", "EU": "Europe", "NA": "North America", "OC": "Oceania", "SA": "South America"}
 
 
 def safe_name(value):
     return "".join(c for c in value if c.isalnum() or c in "-_")
+
+
+def display_region(value):
+    value = value or "Unknown Region"
+    return value[:-9] if value.endswith(" Province") else value
+
+
+def display_city(value):
+    value = value or "Unknown City"
+    return value.split(" (", 1)[0]
 
 
 def find_airport(ident):
@@ -141,12 +154,37 @@ def download_airport(airport, destination, cache_dir, workers=8, include_dark=Fa
     return result
 
 
+def ensure_csv(url, path, refresh=False):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    if refresh or not path.exists():
+        print("Downloading %s…" % path.stem)
+        with urllib.request.urlopen(url, timeout=60) as response:
+            path.write_bytes(response.read())
+
+
+def location_names(cache_dir, refresh=False):
+    countries_path = cache_dir / "ourairports-countries.csv"
+    regions_path = cache_dir / "ourairports-regions.csv"
+    ensure_csv(COUNTRIES_CSV, countries_path, refresh)
+    ensure_csv(REGIONS_CSV, regions_path, refresh)
+    countries = {}
+    with countries_path.open(newline="", encoding="utf-8") as handle:
+        for row in csv.DictReader(handle):
+            countries[row.get("code", "").upper()] = {
+                "countryName": row.get("name") or row.get("code"),
+                "continent": CONTINENT_NAMES.get(row.get("continent", "").upper(), row.get("continent") or ""),
+            }
+    regions = {}
+    with regions_path.open(newline="", encoding="utf-8") as handle:
+        for row in csv.DictReader(handle):
+            regions[row.get("code", "").upper()] = row.get("name") or row.get("code")
+    return countries, regions
+
+
 def country_airports(country, cache, airport_types, refresh=False):
     cache.parent.mkdir(parents=True, exist_ok=True)
-    if refresh or not cache.exists():
-        print("Downloading airport index…")
-        with urllib.request.urlopen(AIRPORTS_CSV, timeout=60) as response:
-            cache.write_bytes(response.read())
+    ensure_csv(AIRPORTS_CSV, cache, refresh)
+    countries, regions = location_names(cache.parent, refresh)
     allowed = None if "all" in airport_types else set(airport_types)
     with cache.open(newline="", encoding="utf-8") as handle:
         rows = csv.DictReader(handle)
@@ -161,9 +199,32 @@ def country_airports(country, cache, airport_types, refresh=False):
                 values[ident] = {
                     "country": row.get("iso_country", "").upper(),
                     "region": row.get("iso_region", ""),
-                    "city": row.get("municipality", "") or "Unknown City",
+                    "regionName": display_region(regions.get(row.get("iso_region", "").upper(), row.get("iso_region", ""))),
+                    "city": display_city(row.get("municipality", "")),
                 }
+                values[ident].update(countries.get(values[ident]["country"], {}))
         return [(ident, values[ident]) for ident in sorted(values)]
+
+
+def selected_airports(idents, cache):
+    ensure_csv(AIRPORTS_CSV, cache)
+    countries, regions = location_names(cache.parent)
+    wanted = {ident.upper() for ident in idents}
+    locations = {}
+    with cache.open(newline="", encoding="utf-8") as handle:
+        for row in csv.DictReader(handle):
+            ident = (row.get("gps_code") or row.get("ident") or "").strip().upper()
+            if ident not in wanted:
+                continue
+            country = row.get("iso_country", "").upper()
+            locations[ident] = {
+                "country": country,
+                "region": row.get("iso_region", ""),
+                "regionName": display_region(regions.get(row.get("iso_region", "").upper(), row.get("iso_region", ""))),
+                "city": display_city(row.get("municipality", "")),
+            }
+            locations[ident].update(countries.get(country, {}))
+    return [(ident.upper(), locations.get(ident.upper(), {})) for ident in idents]
 
 
 def write_cache_index(cache_dir):
@@ -299,7 +360,8 @@ def main():
     install.add_argument("--host", required=True)
     args = parser.parse_args()
     if args.command == "airport":
-        build_pack(args, [value.upper() for value in args.idents])
+        cache=ROOT/"work"/"ourairports-airports.csv"
+        build_pack(args, selected_airports(args.idents, cache))
     elif args.command == "country":
         cache=ROOT/"work"/"ourairports-airports.csv"
         records=country_airports(args.country,cache,args.types.split(","),args.refresh_airports)

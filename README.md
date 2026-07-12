@@ -86,7 +86,7 @@ The iPad uses an old SSH server, so modern OpenSSH needs RSA compatibility flags
 
 ```sh
 IP=192.168.2.19
-DEB=packages/com.skyning.skycharts_0.8.0-1+debug_iphoneos-arm.deb
+DEB=packages/com.skyning.skycharts_0.9.0-1+debug_iphoneos-arm.deb
 
 scp -O -o StrictHostKeyChecking=no \
   -o HostKeyAlgorithms=+ssh-rsa \
@@ -184,17 +184,21 @@ In SkyCharts, open the gear menu, choose a download option, and enter `http://MA
 
 ## Chart categories
 
-Provider categories are normalized into five stable LIDO-style sections:
+Provider categories are normalized into five compact Jeppesen-style sections:
 
 ```text
-DEPARTURE   SID, SIDPT, departure procedure types
-ARRIVAL     STAR, STARPT, arrival procedure types
-APPROACH    IAC and approach procedure types
-AIRPORT     AGC, APC, AFC, LVC, ADC, APT
+STAR        STAR, STARPT, arrival procedure types
+SID         SID, SIDPT, departure procedure types
+APP         IAC and approach procedure types
+TAXI        AGC, APC, AFC, LVC, ADC, APT
 MISC        Any remaining provider type, including AOI
 ```
 
-Within a section, runway charts are grouped under headers such as `RWY 10L` and `RWY 19R`; charts without runway metadata appear under `GENERAL`.
+Within a section, runway charts are grouped under headers such as `RWY 10L` and `RWY 19R`; charts without runway metadata appear under `GENERAL`. SID and STAR rows highlight the actual procedure name or designator in amber for faster scanning.
+
+Downloaded content is presented as a collapsible location hierarchy: continent → country → state/province/region → city. Airport totals appear at the city level instead of listing every airport as a separate row. Pack deletion remains available under the collapsible **Installed Packages** branch.
+
+The app includes iOS 6 icon assets at 57, 72, 114, and 144 pixels, generated from `SkyCharts/Resources/SkyChartsIcon-1024.png` with transparent outer corners and prerendered artwork.
 
 ## Optional legacy relay
 

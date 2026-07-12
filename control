@@ -1,6 +1,6 @@
 Package: com.skyning.skycharts
 Name: SkyCharts
-Version: 0.8.0
+Version: 0.9.0
 Architecture: iphoneos-arm
 Description: Offline LIDO chart viewer for legacy iPads running iOS 6.
 Maintainer: skyning
