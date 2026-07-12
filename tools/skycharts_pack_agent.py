@@ -21,6 +21,14 @@ def public_job(job):
     return {key: value for key, value in job.items() if key not in ("process", "directory", "logPath")}
 
 
+def estimate_eta(created_at, fraction, now=None):
+    now = now if now is not None else time.time()
+    elapsed = max(0.0, now - created_at)
+    if fraction <= 0.005 or fraction >= 1.0 or elapsed < 2:
+        return None
+    return max(0, int(elapsed * (1.0 - fraction) / fraction))
+
+
 def watch_job(job_id):
     with LOCK:
         job = JOBS[job_id]
@@ -32,6 +40,20 @@ def watch_job(job_id):
             log.flush()
             progress = line.strip()
             if progress:
+                if progress.startswith("@@SKYCHARTS_PROGRESS "):
+                    try:
+                        fraction = min(1.0, max(0.0, float(progress.split(None, 1)[1])))
+                    except (ValueError, IndexError):
+                        continue
+                    with LOCK:
+                        job["fraction"] = fraction
+                        eta = estimate_eta(job["createdAt"], fraction)
+                        if eta is None:
+                            job.pop("etaSeconds", None)
+                        else:
+                            job["etaSeconds"] = eta
+                    print("[%s] overall %d%%" % (job_id, int(fraction * 100)), flush=True)
+                    continue
                 with LOCK:
                     job["progress"] = progress
                 print("[%s] %s" % (job_id, progress), flush=True)
@@ -41,6 +63,8 @@ def watch_job(job_id):
         if code == 0 and (job["directory"] / "pack.json").exists():
             job["status"] = "ready"
             job["manifest"] = "/packs/%s/pack.json" % job_id
+            job["fraction"] = 1.0
+            job["etaSeconds"] = 0
         else:
             job["status"] = "failed"
             job["error"] = readable_failure(job["logPath"])
@@ -69,7 +93,7 @@ def spawn_job(job_id, command, metadata):
     directory.parent.mkdir(parents=True, exist_ok=True)
     log_path = directory.parent / (job_id + ".log")
     process = subprocess.Popen(command, cwd=str(ROOT), stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1)
-    job = {"id": job_id, "status": "building", "progress": "Starting downloader…", "createdAt": time.time(), "directory": directory, "process": process, "logPath": log_path}
+    job = {"id": job_id, "status": "building", "progress": "Starting downloader…", "fraction": 0.0, "createdAt": time.time(), "directory": directory, "process": process, "logPath": log_path}
     job.update(metadata)
     with LOCK:
         JOBS[job_id] = job

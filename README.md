@@ -96,7 +96,7 @@ The iPad uses an old SSH server, so modern OpenSSH needs RSA compatibility flags
 
 ```sh
 IP=192.168.2.19
-DEB=packages/com.skyning.skycharts_0.10.0-1+debug_iphoneos-arm.deb
+DEB=packages/com.skyning.skycharts_0.10.2-1+debug_iphoneos-arm.deb
 
 scp -O -o StrictHostKeyChecking=no \
   -o HostKeyAlgorithms=+ssh-rsa \
@@ -192,6 +192,8 @@ curl http://127.0.0.1:8770/health
 
 In SkyCharts, open the gear menu, choose a download option, and enter `http://MAC-LAN-IP:8770`. The app can request a country or comma-separated ICAO codes, polls the job, downloads light PNGs, and atomically installs the pack. Keep the agent running until installation completes.
 
+While a pack is being built, the footer shows overall completion percentage and an estimated remaining time. The estimate uses elapsed time plus global airport/chart progress and becomes more accurate after the first few charts complete.
+
 ## Chart categories
 
 Provider categories are normalized into five compact Jeppesen-style sections:
@@ -204,7 +206,7 @@ TAXI        AGC, APC, AFC, LVC, ADC, APT
 MISC        Any remaining provider type, including AOI
 ```
 
-Within a section, runway charts are grouped under headers such as `RWY 10L` and `RWY 19R`; charts without runway metadata appear under `GENERAL`.
+The five controls sit inside a single dark vertical pill. The active category uses an inset orange selector with a dark central label, following the classic Jeppesen iPad visual language. Within a section, runway charts are grouped under headers such as `RWY 10L` and `RWY 19R`; charts without runway metadata appear under `GENERAL`.
 
 Downloaded content is presented as a collapsible location hierarchy: continent → country → state/province/region → city. Airport totals appear at the city level instead of listing every airport as a separate row. Pack deletion remains available under the collapsible **Installed Packages** branch.
 
@@ -212,7 +214,7 @@ The app includes iOS 6 icon assets at 57, 72, 114, and 144 pixels, generated fro
 
 ## METAR weather
 
-The `Wx` button at the bottom of the category rail opens a compact iOS 6 weather window for the selected airport. It offers Raw and Decoded views plus manual refresh. Weather is read directly from the latest worldwide station files published by the U.S. National Weather Service over anonymous FTP, avoiding modern HTTPS requirements that iOS 6 cannot satisfy.
+The beveled `Wx` button at the bottom of the category rail matches the airport selector and opens a compact iOS 6 weather window for the selected airport. It offers Raw and Decoded views plus manual refresh. Weather is read directly from the latest worldwide station files published by the U.S. National Weather Service over anonymous FTP, avoiding modern HTTPS requirements that iOS 6 cannot satisfy.
 
 ## Optional legacy relay
 

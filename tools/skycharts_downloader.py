@@ -125,7 +125,13 @@ def download_chart(metadata, destination, cache_dir, sas, include_dark):
     return chart, cache_hit
 
 
-def download_airport(airport, destination, cache_dir, workers=8, include_dark=False):
+def emit_progress(airport_number, total_airports, completed=0, total_charts=1):
+    chart_fraction = float(completed) / max(1, total_charts)
+    overall = ((airport_number - 1) + chart_fraction) / max(1, total_airports)
+    print("@@SKYCHARTS_PROGRESS %.6f" % min(1.0, max(0.0, overall)), flush=True)
+
+
+def download_airport(airport, destination, cache_dir, workers=8, include_dark=False, airport_number=1, total_airports=1):
     catalog = planner.chart_catalog(airport["fsid"])
     sas = planner.planner_request("/api/v1/charts-sas", expect_json=False).lstrip("?")
     ordered = []
@@ -142,6 +148,7 @@ def download_airport(airport, destination, cache_dir, workers=8, include_dark=Fa
             chart, cache_hit = future.result()
             completed += 1
             print("  charts %d/%d • %s • %s" % (completed, total_charts, chart["name"] if chart else "unavailable", "cached" if cache_hit else "downloaded"), flush=True)
+            emit_progress(airport_number, total_airports, completed, total_charts)
             if chart:
                 ordered.append((category_index, chart_index, category_name, chart))
     categories_by_index = {}
@@ -285,25 +292,30 @@ def build_pack(args, airport_records, country=None):
     temp = pathlib.Path(tempfile.mkdtemp(prefix="skycharts-pack-", dir=str(output.parent)))
     airports = []
     try:
-        total = len(airport_records)
-        for number, record in enumerate(airport_records, 1):
+        records = list(airport_records)
+        if getattr(args, "limit", None):
+            records = records[:args.limit]
+        total = len(records)
+        for number, record in enumerate(records, 1):
             ident, location = record if isinstance(record, tuple) else (record, {})
-            if getattr(args, "limit", None) and len(airports) >= args.limit:
-                break
             print("[%d/%d] %s" % (number, total, ident), flush=True)
+            emit_progress(number, total)
             airport = find_airport(ident)
             if not airport:
                 print("  skipped: planner airport not found", flush=True)
+                emit_progress(number + 1, total)
                 continue
             try:
                 airport.update(location)
-                downloaded = download_airport(airport, temp, cache_dir, args.workers, args.include_dark)
+                downloaded = download_airport(airport, temp, cache_dir, args.workers, args.include_dark, number, total)
             except Exception as error:
                 print("  skipped: %s" % error, flush=True)
+                emit_progress(number + 1, total)
                 continue
             if downloaded["categories"]:
                 airports.append(downloaded)
                 print("  %d categories" % len(downloaded["categories"]), flush=True)
+            emit_progress(number + 1, total)
         manifest = {
             "schemaVersion": 1,
             "packId": safe_name(args.pack_id),
