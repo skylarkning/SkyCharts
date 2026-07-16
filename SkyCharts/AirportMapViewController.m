@@ -12,16 +12,19 @@ static CGFloat SkyDistanceToSegment(CGPoint point, CGPoint start, CGPoint end) {
 @interface AirportMapCanvas : UIView
 @property(nonatomic,retain) NSDictionary *mapData;
 @property(nonatomic,retain) NSArray *features;
+@property(nonatomic,assign) CGFloat labelScale;
+@property(nonatomic,assign) NSInteger detailLevel;
 - (id)initWithMapData:(NSDictionary *)mapData size:(CGSize)size;
 - (NSDictionary *)featureAtPoint:(CGPoint)point tolerance:(CGFloat)tolerance;
+- (void)updateForZoomScale:(CGFloat)zoomScale fitScale:(CGFloat)fitScale;
 @end
 
 @implementation AirportMapCanvas
-@synthesize mapData=_mapData,features=_features;
+@synthesize mapData=_mapData,features=_features,labelScale=_labelScale,detailLevel=_detailLevel;
 
 - (id)initWithMapData:(NSDictionary *)mapData size:(CGSize)size {
     if((self=[super initWithFrame:CGRectMake(0,0,size.width,size.height)])){
-        self.opaque=YES;self.backgroundColor=[UIColor colorWithRed:.075 green:.095 blue:.12 alpha:1];self.mapData=mapData;self.features=[mapData objectForKey:@"features"]?:[NSArray array];
+        self.opaque=YES;self.backgroundColor=[UIColor colorWithRed:.075 green:.095 blue:.12 alpha:1];self.mapData=mapData;self.features=[mapData objectForKey:@"features"]?:[NSArray array];self.labelScale=1;self.detailLevel=0;
     }return self;
 }
 - (CGPoint)mapPoint:(NSArray *)coordinate {
@@ -41,8 +44,9 @@ static CGFloat SkyDistanceToSegment(CGPoint point, CGPoint start, CGPoint end) {
     return nil;
 }
 - (void)drawLabel:(NSString *)text point:(CGPoint)point color:(UIColor *)color font:(UIFont *)font {
-    if(!text.length)return;CGSize size=[text sizeWithFont:font];CGRect box=CGRectMake(point.x-size.width/2-3,point.y-size.height/2-1,size.width+6,size.height+2);[[UIColor colorWithWhite:.03 alpha:.82]setFill];UIBezierPath *background=[UIBezierPath bezierPathWithRoundedRect:box cornerRadius:2];[background fill];[color set];[text drawAtPoint:CGPointMake(box.origin.x+3,box.origin.y+1)withFont:font];
+    if(!text.length)return;CGFloat padding=3/MAX(.01,self.labelScale),vertical=1/MAX(.01,self.labelScale);CGSize size=[text sizeWithFont:font];CGRect box=CGRectMake(point.x-size.width/2-padding,point.y-size.height/2-vertical,size.width+padding*2,size.height+vertical*2);[[UIColor colorWithWhite:.03 alpha:.82]setFill];UIBezierPath *background=[UIBezierPath bezierPathWithRoundedRect:box cornerRadius:2/MAX(.01,self.labelScale)];[background fill];[color set];[text drawAtPoint:CGPointMake(box.origin.x+padding,box.origin.y+vertical)withFont:font];
 }
+- (UIFont *)labelFontWithScreenSize:(CGFloat)size { return [UIFont boldSystemFontOfSize:size/MAX(.01,self.labelScale)]; }
 - (CGPoint)middlePointForFeature:(NSDictionary *)feature {
     NSArray *points=[feature objectForKey:@"points"];if(!points.count)return CGPointZero;return [self mapPoint:[points objectAtIndex:points.count/2]];
 }
@@ -52,14 +56,17 @@ static CGFloat SkyDistanceToSegment(CGPoint point, CGPoint start, CGPoint end) {
     for(NSDictionary *feature in self.features){NSString *kind=[feature objectForKey:@"kind"];UIColor *fill=[self fillForKind:kind];if(!fill)continue;UIBezierPath *path=[self pathForFeature:feature];[fill setFill];[path fill];[[UIColor colorWithWhite:.48 alpha:.55]setStroke];path.lineWidth=2;[path stroke];}
     for(NSDictionary *feature in self.features){NSString *kind=[feature objectForKey:@"kind"];if(![kind isEqual:@"runway"])continue;UIBezierPath *path=[self pathForFeature:feature];[[UIColor colorWithWhite:.80 alpha:1]setStroke];path.lineWidth=50;[path stroke];[[UIColor colorWithWhite:.10 alpha:1]setStroke];path.lineWidth=44;[path stroke];CGFloat dash[]={24,16};CGContextSaveGState(context);CGContextSetLineDash(context,0,dash,2);[[UIColor whiteColor]setStroke];path.lineWidth=3;[path stroke];CGContextRestoreGState(context);}
     for(NSDictionary *feature in self.features){NSString *kind=[feature objectForKey:@"kind"];if(!([kind isEqual:@"taxiway"]||[kind isEqual:@"taxilane"]))continue;UIBezierPath *path=[self pathForFeature:feature];[[UIColor colorWithWhite:.40 alpha:1]setStroke];path.lineWidth=[kind isEqual:@"taxilane"]?10:18;[path stroke];[[UIColor colorWithRed:1 green:.79 blue:.03 alpha:1]setStroke];path.lineWidth=2;[path stroke];}
-    for(NSDictionary *feature in self.features){NSString *kind=[feature objectForKey:@"kind"];if(![kind isEqual:@"parking_position"])continue;NSArray *points=[feature objectForKey:@"points"];UIBezierPath *path=[self pathForFeature:feature];[[UIColor colorWithRed:.15 green:.86 blue:.70 alpha:1]setStroke];path.lineWidth=3;[path stroke];CGPoint point=[self mapPoint:[points lastObject]];[[UIColor colorWithRed:.15 green:.86 blue:.70 alpha:1]setFill];CGContextFillEllipseInRect(context,CGRectMake(point.x-4,point.y-4,8,8));}
+    if(self.detailLevel>0)for(NSDictionary *feature in self.features){NSString *kind=[feature objectForKey:@"kind"];if(![kind isEqual:@"parking_position"])continue;NSArray *points=[feature objectForKey:@"points"];UIBezierPath *path=[self pathForFeature:feature];[[UIColor colorWithRed:.15 green:.86 blue:.70 alpha:1]setStroke];path.lineWidth=3/MAX(.01,self.labelScale);[path stroke];CGPoint point=[self mapPoint:[points lastObject]];CGFloat radius=3/MAX(.01,self.labelScale);[[UIColor colorWithRed:.15 green:.86 blue:.70 alpha:1]setFill];CGContextFillEllipseInRect(context,CGRectMake(point.x-radius,point.y-radius,radius*2,radius*2));}
     NSMutableSet *labeledTaxiways=[NSMutableSet set];for(NSDictionary *feature in self.features){NSString *kind=[feature objectForKey:@"kind"],*reference=[feature objectForKey:@"ref"]?:[feature objectForKey:@"name"];
-        if([kind isEqual:@"runway"]){NSArray *points=[feature objectForKey:@"points"];if(points.count){[self drawLabel:reference point:[self mapPoint:[points objectAtIndex:0]]color:[UIColor whiteColor]font:[UIFont boldSystemFontOfSize:15]];[self drawLabel:reference point:[self mapPoint:[points lastObject]]color:[UIColor whiteColor]font:[UIFont boldSystemFontOfSize:15]];}}
-        else if(([kind isEqual:@"taxiway"]||[kind isEqual:@"taxilane"])&&reference.length>0&&reference.length<=8&&![labeledTaxiways containsObject:reference]){[labeledTaxiways addObject:reference];[self drawLabel:reference point:[self middlePointForFeature:feature]color:[UIColor colorWithRed:1 green:.86 blue:.08 alpha:1]font:[UIFont boldSystemFontOfSize:12]];}
-        else if([kind isEqual:@"parking_position"]||[kind isEqual:@"gate"])[self drawLabel:reference point:[self middlePointForFeature:feature]color:[UIColor colorWithRed:.60 green:1 blue:.90 alpha:1]font:[UIFont boldSystemFontOfSize:10]];
-        else if([kind isEqual:@"terminal"]&&reference.length)[self drawLabel:reference point:[self middlePointForFeature:feature]color:[UIColor whiteColor]font:[UIFont boldSystemFontOfSize:14]];
+        if([kind isEqual:@"runway"]){NSArray *points=[feature objectForKey:@"points"],*ends=[reference componentsSeparatedByString:@"/"];NSString *first=ends.count?[ends objectAtIndex:0]:reference,*last=ends.count>1?[ends lastObject]:reference;if(points.count){[self drawLabel:first point:[self mapPoint:[points objectAtIndex:0]]color:[UIColor whiteColor]font:[self labelFontWithScreenSize:15]];[self drawLabel:last point:[self mapPoint:[points lastObject]]color:[UIColor whiteColor]font:[self labelFontWithScreenSize:15]];}}
+        else if(([kind isEqual:@"taxiway"]||[kind isEqual:@"taxilane"])&&reference.length>0&&reference.length<=8&&![labeledTaxiways containsObject:reference]){[labeledTaxiways addObject:reference];[self drawLabel:reference point:[self middlePointForFeature:feature]color:[UIColor colorWithRed:1 green:.86 blue:.08 alpha:1]font:[self labelFontWithScreenSize:11]];}
+        else if(self.detailLevel>0&&([kind isEqual:@"parking_position"]||[kind isEqual:@"gate"])){[self drawLabel:reference point:[self middlePointForFeature:feature]color:[UIColor colorWithRed:.60 green:1 blue:.90 alpha:1]font:[self labelFontWithScreenSize:self.detailLevel>1?11:9]];}
+        else if(self.detailLevel>0&&[kind isEqual:@"terminal"]&&reference.length)[self drawLabel:reference point:[self middlePointForFeature:feature]color:[UIColor whiteColor]font:[self labelFontWithScreenSize:13]];
     }
     NSString *north=@"N";UIFont *northFont=[UIFont boldSystemFontOfSize:22];[[UIColor whiteColor]set];[north drawAtPoint:CGPointMake(self.bounds.size.width-52,28)withFont:northFont];CGContextSetStrokeColorWithColor(context,[UIColor whiteColor].CGColor);CGContextSetLineWidth(context,3);CGContextMoveToPoint(context,self.bounds.size.width-42,58);CGContextAddLineToPoint(context,self.bounds.size.width-42,93);CGContextMoveToPoint(context,self.bounds.size.width-42,58);CGContextAddLineToPoint(context,self.bounds.size.width-50,72);CGContextMoveToPoint(context,self.bounds.size.width-42,58);CGContextAddLineToPoint(context,self.bounds.size.width-34,72);CGContextStrokePath(context);
+}
+- (void)updateForZoomScale:(CGFloat)zoomScale fitScale:(CGFloat)fitScale {
+    if(fitScale<=0)return;CGFloat ratio=zoomScale/fitScale;NSInteger level=ratio>=3?2:(ratio>=1.65?1:0);CGFloat scale=fitScale*(level==0?1:(level==1?1.8:3.2));if(level!=self.detailLevel||fabs(scale-self.labelScale)>.001){self.detailLevel=level;self.labelScale=scale;[self setNeedsDisplay];}
 }
 - (NSDictionary *)featureAtPoint:(CGPoint)point tolerance:(CGFloat)tolerance {
     NSDictionary *best=nil;CGFloat bestDistance=tolerance;
@@ -100,8 +107,8 @@ static CGFloat SkyDistanceToSegment(CGPoint point, CGPoint start, CGPoint end) {
 - (void)done { [self dismissModalViewControllerAnimated:YES]; }
 - (UIView *)viewForZoomingInScrollView:(UIScrollView *)scrollView { return self.canvas; }
 - (void)centerMap { CGSize bounds=self.scrollView.bounds.size,content=self.scrollView.contentSize;CGFloat horizontal=MAX(0,(bounds.width-content.width)/2),vertical=MAX(0,(bounds.height-content.height)/2);self.scrollView.contentInset=UIEdgeInsetsMake(vertical,horizontal,vertical,horizontal); }
-- (void)scrollViewDidZoom:(UIScrollView *)scrollView { [self centerMap]; }
-- (void)fitMap { if(!self.canvas)return;CGSize bounds=self.scrollView.bounds.size,content=self.canvas.bounds.size;if(bounds.width<=0||bounds.height<=0)return;CGFloat scale=MIN(bounds.width/content.width,bounds.height/content.height)*.96;self.scrollView.minimumZoomScale=scale;self.scrollView.maximumZoomScale=MAX(5,scale*6);self.scrollView.zoomScale=scale;self.scrollView.contentOffset=CGPointZero;[self centerMap]; }
+- (void)scrollViewDidZoom:(UIScrollView *)scrollView { [self.canvas updateForZoomScale:scrollView.zoomScale fitScale:scrollView.minimumZoomScale];[self centerMap]; }
+- (void)fitMap { if(!self.canvas)return;CGSize bounds=self.scrollView.bounds.size,content=self.canvas.bounds.size;if(bounds.width<=0||bounds.height<=0)return;CGFloat scale=MIN(bounds.width/content.width,bounds.height/content.height)*.96;self.scrollView.minimumZoomScale=scale;self.scrollView.maximumZoomScale=MAX(5,scale*6);self.scrollView.zoomScale=scale;[self.canvas updateForZoomScale:scale fitScale:scale];self.scrollView.contentOffset=CGPointZero;[self centerMap]; }
 - (NSString *)displayNameForKind:(NSString *)kind { NSDictionary *names=[NSDictionary dictionaryWithObjectsAndKeys:@"Runway",@"runway",@"Taxiway",@"taxiway",@"Taxilane",@"taxilane",@"Apron",@"apron",@"Parking Stand",@"parking_position",@"Gate",@"gate",@"Holding Position",@"holding_position",@"Terminal",@"terminal",@"Hangar",@"hangar",nil];return [names objectForKey:kind]?:[kind capitalizedString]; }
 - (void)mapTapped:(UITapGestureRecognizer *)gesture { if(gesture.state!=UIGestureRecognizerStateRecognized)return;CGPoint point=[gesture locationInView:self.canvas];CGFloat tolerance=MAX(12,28/MAX(.01,self.scrollView.zoomScale));NSDictionary *feature=[self.canvas featureAtPoint:point tolerance:tolerance];if(!feature)return;NSString *kind=[self displayNameForKind:[feature objectForKey:@"kind"]],*reference=[feature objectForKey:@"ref"],*name=[feature objectForKey:@"name"],*surface=[feature objectForKey:@"surface"];NSMutableArray *details=[NSMutableArray array];if(reference.length)[details addObject:[@"Reference: "stringByAppendingString:reference]];if(name.length&&![name isEqual:reference])[details addObject:name];if(surface.length)[details addObject:[@"Surface: "stringByAppendingString:surface]];UIAlertView *alert=[[[UIAlertView alloc]initWithTitle:kind message:details.count?[details componentsJoinedByString:@"\n"]:@"No additional information is available for this map feature." delegate:nil cancelButtonTitle:@"Done" otherButtonTitles:nil]autorelease];[alert show]; }
 - (BOOL)shouldAutorotateToInterfaceOrientation:(UIInterfaceOrientation)orientation { return YES; }

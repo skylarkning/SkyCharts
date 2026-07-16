@@ -16,6 +16,7 @@ SkyCharts provides:
 - Runway-grouped procedure lists and a collapsible chart sidebar.
 - Pinch-to-zoom, panning, automatic centering, and orientation-aware chart fitting.
 - Interactive offline airport maps with runways, taxiways, aprons, terminals, gates, and parking stands.
+- Zoom-aware airport-map detail: runway and taxiway references at overview scale, then stand and gate numbers when zoomed in.
 - Touch inspection of airport-map features with ICAO references and available surface details.
 - Current METAR weather in raw and decoded views.
 - In-app chart downloads through a Mac on the same network.
@@ -210,7 +211,7 @@ The iPad uses an old SSH server, so modern OpenSSH needs RSA compatibility flags
 
 ```sh
 IP=192.168.2.19
-DEB=packages/com.skyning.skycharts_0.11.1-1+debug_iphoneos-arm.deb
+DEB=packages/com.skyning.skycharts_0.12.0-1+debug_iphoneos-arm.deb
 
 scp -O -o StrictHostKeyChecking=no \
   -o HostKeyAlgorithms=+ssh-rsa \
@@ -287,7 +288,7 @@ The installer stages into a temporary directory, validates `pack.json`, and atom
 ./tools/skycharts
 ```
 
-The menu handles browser authentication, starts the Pack Agent, builds country or selected-airport packs, downloads interactive airport maps, installs packs over SSH, and reports both cache types. If no cookie file exists, authenticated operations automatically offer browser login.
+The menu handles browser authentication, starts the Pack Agent, builds country or selected-airport packs, downloads interactive airport maps, installs packs over SSH, and reports both cache types. Choose **Manage cached airport maps** to see each cached airport's name, size, feature count, stand count, and download date, then delete selected entries or clear the entire airport-map cache. Cache deletion does not remove exported files or content already installed on the iPad. If no cookie file exists, authenticated operations automatically offer browser login.
 
 Build or refresh an airport map directly:
 

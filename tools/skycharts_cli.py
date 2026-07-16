@@ -50,21 +50,99 @@ def airport_map(ident, output, refresh=False):
     return run(command)
 
 
+def format_bytes(size):
+    value = float(size)
+    for unit in ("B", "KB", "MB", "GB"):
+        if value < 1024 or unit == "GB":
+            return "%d %s" % (value, unit) if unit == "B" else "%.1f %s" % (value, unit)
+        value /= 1024
+
+
+def airport_map_cache_entries(cache_dir=None):
+    cache_dir = pathlib.Path(cache_dir or ROOT / "work" / "airport-map-cache")
+    entries = []
+    for path in sorted(cache_dir.glob("*.json")) if cache_dir.exists() else []:
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            data = {}
+        counts = data.get("counts") if isinstance(data.get("counts"), dict) else {}
+        entries.append({
+            "ident": str(data.get("ident") or path.stem).upper(),
+            "name": str(data.get("name") or "Unreadable cache entry"),
+            "generated": str(data.get("generatedAt") or "")[:10] or "unknown date",
+            "features": len(data.get("features", [])) if isinstance(data.get("features"), list) else 0,
+            "stands": counts.get("parking_position", 0),
+            "size": path.stat().st_size,
+            "path": path,
+        })
+    return entries
+
+
+def delete_airport_map_cache(idents, cache_dir=None):
+    requested = {str(ident).upper() for ident in idents}
+    removed = []
+    for entry in airport_map_cache_entries(cache_dir):
+        if entry["ident"] not in requested:
+            continue
+        entry["path"].unlink()
+        removed.append(entry["ident"])
+    return removed
+
+
+def manage_airport_map_cache():
+    while True:
+        entries = airport_map_cache_entries()
+        print("\nCached Airport Map Manager")
+        print("==========================")
+        if not entries:
+            print("No cached airport maps.\n")
+            return
+        total = sum(item["size"] for item in entries)
+        for index, entry in enumerate(entries, 1):
+            print("%d. %s — %s" % (index, entry["ident"], entry["name"]))
+            print("   %s • %d features • %d stands • %s" % (
+                format_bytes(entry["size"]), entry["features"], entry["stands"], entry["generated"]))
+        print("\nTotal: %d maps • %s" % (len(entries), format_bytes(total)))
+        print("A. Delete all cached airport maps")
+        print("0. Back")
+        selection = input("Delete map number(s), e.g. 1 3: ").strip()
+        if selection == "0" or not selection:
+            return
+        if selection.lower() == "a":
+            selected = entries
+        else:
+            selected = []
+            for value in selection.replace(",", " ").split():
+                try:
+                    number = int(value)
+                except ValueError:
+                    continue
+                if 1 <= number <= len(entries) and entries[number - 1] not in selected:
+                    selected.append(entries[number - 1])
+        if not selected:
+            print("No valid airport-map entries were selected.")
+            continue
+        names = ", ".join(item["ident"] for item in selected)
+        print("This deletes only the reusable Mac cache; exported files and iPad content are unchanged.")
+        if not ask("Delete %s? (y/N)" % names, "N").lower().startswith("y"):
+            continue
+        removed = delete_airport_map_cache(item["ident"] for item in selected)
+        print("Deleted %d cached airport map(s): %s\n" % (len(removed), ", ".join(removed)))
+
+
 def cache_status():
     index = ROOT / "work" / "chart-cache" / "index.json"
-    if not index.exists():
-        print("\nCache is empty. It will be created by the first download.\n")
-        return
-    data = json.loads(index.read_text())
-    charts = data.get("charts", [])
+    charts = []
+    if index.exists():
+        data = json.loads(index.read_text())
+        charts = data.get("charts", [])
     print("\nCached charts: %d" % len(charts))
     print("Cached pages:  %d" % sum(item.get("pages", 0) for item in charts))
-    subprocess.call(["du", "-sh", str(index.parent)])
-    map_cache = ROOT / "work" / "airport-map-cache"
-    maps = list(map_cache.glob("*.json")) if map_cache.exists() else []
-    print("Cached airport maps: %d" % len(maps))
-    if maps:
-        subprocess.call(["du", "-sh", str(map_cache)])
+    if index.exists():
+        subprocess.call(["du", "-sh", str(index.parent)])
+    maps = airport_map_cache_entries()
+    print("Cached airport maps: %d (%s)" % (len(maps), format_bytes(sum(item["size"] for item in maps))))
     print()
 
 
@@ -89,6 +167,7 @@ SkyCharts Mac Client
 5. Download an interactive airport map
 6. Install an existing pack over SSH
 7. Show reusable cache status
+8. Manage cached airport maps
 0. Quit
 """)
         choice = input("Choose an option: ").strip()
@@ -131,6 +210,8 @@ SkyCharts Mac Client
             install(pack, host)
         elif choice == "7":
             cache_status()
+        elif choice == "8":
+            manage_airport_map_cache()
         else:
             print("Unknown option.")
 
