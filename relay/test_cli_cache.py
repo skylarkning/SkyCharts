@@ -6,6 +6,7 @@ import unittest
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1] / "tools"))
 import skycharts_cli
+import skycharts_downloader
 
 
 class AirportMapCacheManagerTests(unittest.TestCase):
@@ -38,6 +39,64 @@ class AirportMapCacheManagerTests(unittest.TestCase):
             entries = skycharts_cli.airport_map_cache_entries(path.parent)
             self.assertEqual(entries[0]["ident"], "TEST")
             self.assertEqual(skycharts_cli.delete_airport_map_cache(["TEST"], path.parent), ["TEST"])
+
+
+class ChartAssetCacheManagerTests(unittest.TestCase):
+    def write_chart(self, root, guid):
+        asset = root / "charts" / guid / "0-light.png"
+        asset.parent.mkdir(parents=True, exist_ok=True)
+        asset.write_bytes((guid + "-image").encode("ascii"))
+        metadata = root / guid / "metadata.json"
+        metadata.parent.mkdir(parents=True, exist_ok=True)
+        metadata.write_text(json.dumps({"guid": guid, "pages": [{"light": "charts/%s/0-light.png" % guid}]}), encoding="utf-8")
+
+    def test_groups_legacy_charts_by_manifest_and_deletes_safely(self):
+        with tempfile.TemporaryDirectory() as directory:
+            base = pathlib.Path(directory)
+            cache = base / "cache"
+            manifests = base / "jobs"
+            for guid in ("chart-a", "chart-shared", "chart-unknown"):
+                self.write_chart(cache, guid)
+            pack = {
+                "airports": [
+                    {"ident": "KAAA", "name": "Alpha Airport", "categories": [{"name": "APP", "charts": [
+                        {"guid": "chart-a", "name": "Alpha Approach", "type": "IAC"},
+                        {"guid": "chart-shared", "name": "Shared Chart", "type": "AGC"},
+                    ]}]},
+                    {"ident": "KBBB", "name": "Bravo Airport", "categories": [{"name": "TAXI", "charts": [
+                        {"guid": "chart-shared", "name": "Shared Chart", "type": "AGC"},
+                    ]}]},
+                ]
+            }
+            manifests.mkdir(parents=True)
+            (manifests / "pack.json").write_text(json.dumps(pack), encoding="utf-8")
+
+            entries = skycharts_cli.chart_cache_entries(cache, [manifests])
+            airports = skycharts_cli.chart_cache_airports(entries)
+            self.assertEqual(set(airports), {"KAAA", "KBBB"})
+            self.assertEqual(len(airports["KAAA"]["guids"]), 2)
+            self.assertEqual(len([entry for entry in entries if not entry["airports"]]), 1)
+
+            removed, removed_size = skycharts_cli.delete_chart_cache_airports(["KAAA"], cache, [manifests])
+            self.assertEqual(set(removed), {"chart-a"})
+            self.assertGreater(removed_size, 0)
+            self.assertFalse((cache / "chart-a").exists())
+            self.assertTrue((cache / "chart-shared").exists())
+            self.assertTrue((cache / "chart-unknown").exists())
+            index = json.loads((cache / "index.json").read_text(encoding="utf-8"))
+            self.assertEqual({item["guid"] for item in index["charts"]}, {"chart-shared", "chart-unknown"})
+
+    def test_new_download_metadata_records_airport_ownership(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = pathlib.Path(directory)
+            chart = {"guid": "guid-1", "name": "ILS 05", "type": "IAC"}
+            pages = [{"light": "charts/guid-1/0-light.png"}]
+            airport = {"ident": "CYYZ", "name": "Toronto Pearson"}
+            skycharts_downloader.write_chart_cache_metadata(chart, pages, root, airport, "APPROACH")
+            metadata = json.loads((root / "guid-1" / "metadata.json").read_text(encoding="utf-8"))
+            self.assertEqual(metadata["name"], "ILS 05")
+            self.assertEqual(metadata["airports"][0]["ident"], "CYYZ")
+            self.assertEqual(metadata["airports"][0]["category"], "APPROACH")
 
 
 if __name__ == "__main__":

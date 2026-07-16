@@ -105,7 +105,37 @@ def download_page(guid, index, page, destination, cache_dir, sas, include_dark=F
     return output
 
 
-def download_chart(metadata, destination, cache_dir, sas, include_dark):
+def write_chart_cache_metadata(metadata, pages, cache_dir, airport=None, category_name=None):
+    guid = metadata["guid"]
+    metadata_path = cache_dir / safe_name(guid) / "metadata.json"
+    existing = {}
+    if metadata_path.exists():
+        try:
+            existing = json.loads(metadata_path.read_text())
+        except (OSError, ValueError):
+            existing = {}
+    record = dict(existing)
+    record["guid"] = guid
+    if not record.get("pages"):
+        record["pages"] = pages
+    for key in ("name", "type"):
+        if metadata.get(key):
+            record[key] = metadata[key]
+    airports = record.get("airports", []) if isinstance(record.get("airports"), list) else []
+    if airport and airport.get("ident"):
+        ident = airport["ident"].upper()
+        entry = {"ident": ident, "name": airport.get("name") or ident}
+        if category_name:
+            entry["category"] = category_name
+        airports = [value for value in airports if not isinstance(value, dict) or value.get("ident", "").upper() != ident]
+        airports.append(entry)
+    record["airports"] = airports
+    record["updatedAt"] = dt.datetime.now(dt.timezone.utc).isoformat()
+    metadata_path.parent.mkdir(parents=True, exist_ok=True)
+    metadata_path.write_text(json.dumps(record, indent=2))
+
+
+def download_chart(metadata, destination, cache_dir, sas, include_dark, airport=None, category_name=None):
     guid = metadata["guid"]
     pages = cached_chart(guid, destination, cache_dir, include_dark)
     cache_hit = pages is not None
@@ -116,11 +146,9 @@ def download_chart(metadata, destination, cache_dir, sas, include_dark):
             images = download_page(guid, index, page, destination, cache_dir, sas, include_dark)
             if images.get("light"):
                 pages.append(images)
-        metadata_path = cache_dir / safe_name(guid) / "metadata.json"
-        metadata_path.parent.mkdir(parents=True, exist_ok=True)
-        metadata_path.write_text(json.dumps({"guid": guid, "pages": pages}, indent=2))
     if not pages:
         return None, cache_hit
+    write_chart_cache_metadata(metadata, pages, cache_dir, airport, category_name)
     chart = dict(metadata)
     chart["pages"] = pages
     return chart, cache_hit
@@ -144,7 +172,7 @@ def download_airport(airport, destination, cache_dir, workers=8, include_dark=Fa
     with ThreadPoolExecutor(max_workers=workers) as executor:
         for category_index, category in enumerate(catalog["categories"]):
             for chart_index, metadata in enumerate(category["charts"]):
-                future = executor.submit(download_chart, metadata, destination, cache_dir, sas, include_dark)
+                future = executor.submit(download_chart, metadata, destination, cache_dir, sas, include_dark, airport, category["name"])
                 futures[future] = (category_index, chart_index, category["name"])
         for future in as_completed(futures):
             category_index, chart_index, category_name = futures[future]
@@ -242,7 +270,11 @@ def write_cache_index(cache_dir):
     for metadata_path in cache_dir.glob("*/metadata.json"):
         try:
             metadata = json.loads(metadata_path.read_text())
-            charts.append({"guid": metadata.get("guid"), "pages": len(metadata.get("pages", []))})
+            entry = {"guid": metadata.get("guid"), "pages": len(metadata.get("pages", []))}
+            for key in ("name", "type", "airports"):
+                if metadata.get(key):
+                    entry[key] = metadata[key]
+            charts.append(entry)
         except (OSError, ValueError):
             pass
     (cache_dir / "index.json").write_text(json.dumps({"schemaVersion": 1, "charts": charts}, indent=2))
@@ -276,9 +308,7 @@ def seed_cache_from_pack(pack_dir, cache_dir):
                     if cached_page.get("light"):
                         available.append(cached_page)
                 if len(available) == len(pages):
-                    metadata_path = cache_dir / safe_name(guid) / "metadata.json"
-                    metadata_path.parent.mkdir(parents=True, exist_ok=True)
-                    metadata_path.write_text(json.dumps({"guid": guid, "pages": available}, indent=2))
+                    write_chart_cache_metadata(chart, available, cache_dir, airport, category.get("name"))
                     seeded += 1
     return seeded
 
