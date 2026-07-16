@@ -18,6 +18,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "relay"))
 import msfs_chart_relay as planner  # noqa: E402
+import skycharts_airport_map  # noqa: E402
 
 AIRPORTS_CSV = "https://davidmegginson.github.io/ourairports-data/airports.csv"
 COUNTRIES_CSV = "https://davidmegginson.github.io/ourairports-data/countries.csv"
@@ -158,7 +159,7 @@ def emit_progress(airport_number, total_airports, completed=0, total_charts=1):
     if not MACHINE_PROGRESS:
         return
     chart_fraction = float(completed) / max(1, total_charts)
-    overall = ((airport_number - 1) + chart_fraction) / max(1, total_airports)
+    overall = 0.90 * (((airport_number - 1) + chart_fraction) / max(1, total_airports))
     print("@@SKYCHARTS_PROGRESS %.6f" % min(1.0, max(0.0, overall)), flush=True)
 
 
@@ -313,6 +314,43 @@ def seed_cache_from_pack(pack_dir, cache_dir):
     return seeded
 
 
+def bundle_airport_maps(airports, destination, workers=4, cache_dir=None):
+    """Add one reusable offline vector map to every airport pack entry."""
+    if not airports:
+        return 0
+    map_root = destination / "maps"
+    map_root.mkdir(parents=True, exist_ok=True)
+    cache_dir = pathlib.Path(cache_dir or ROOT / "work" / "airport-map-cache")
+
+    def build(airport):
+        ident = airport["ident"].upper()
+        result, cached = skycharts_airport_map.build_airport_map(ident, cache_dir=cache_dir)
+        return airport, ident, result, cached
+
+    completed = 0
+    finished = 0
+    pool_size = max(1, min(int(workers or 1), 4, len(airports)))
+    print("Adding airport maps (%d parallel worker%s)…" % (pool_size, "" if pool_size == 1 else "s"), flush=True)
+    with ThreadPoolExecutor(max_workers=pool_size) as executor:
+        futures = {executor.submit(build, airport): airport for airport in airports}
+        for future in as_completed(futures):
+            airport = futures[future]
+            ident = airport.get("ident", "UNKNOWN")
+            try:
+                airport, ident, result, cached = future.result()
+                relative = pathlib.Path("maps") / (ident + ".json")
+                (destination / relative).write_text(json.dumps(result, separators=(",", ":")), encoding="utf-8")
+                airport["map"] = relative.as_posix()
+                completed += 1
+                print("  %s airport map %s" % (ident, "reused" if cached else "downloaded"), flush=True)
+            except Exception as error:
+                print("  %s airport map unavailable: %s" % (ident, error), flush=True)
+            finished += 1
+            if MACHINE_PROGRESS:
+                print("@@SKYCHARTS_PROGRESS %.6f" % (0.90 + 0.09 * finished / len(airports)), flush=True)
+    return completed
+
+
 def build_pack(args, airport_records, country=None):
     os.environ["MSFS_COOKIE_FILE"] = str(pathlib.Path(args.cookie_file).expanduser())
     output = pathlib.Path(args.output).expanduser().resolve()
@@ -349,6 +387,7 @@ def build_pack(args, airport_records, country=None):
                 airports.append(downloaded)
                 print("  %d categories" % len(downloaded["categories"]), flush=True)
             emit_progress(number + 1, total)
+        mapped = bundle_airport_maps(airports, temp, min(args.workers, 4))
         manifest = {
             "schemaVersion": 1,
             "packId": safe_name(args.pack_id),
@@ -363,7 +402,7 @@ def build_pack(args, airport_records, country=None):
         if output.exists():
             shutil.rmtree(output)
         temp.rename(output)
-        print("Created %s with %d airports" % (output, len(airports)))
+        print("Created %s with %d airports and %d airport maps" % (output, len(airports), mapped))
     except Exception:
         shutil.rmtree(temp, ignore_errors=True)
         raise

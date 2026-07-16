@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""LAN download appliance for SkyCharts country chart packs."""
+"""LAN download appliance for combined SkyCharts chart-and-map packs."""
 
 import argparse
 import json
@@ -265,7 +265,7 @@ class Handler(BaseHTTPRequestHandler):
 
 def main():
     global ARGS
-    parser = argparse.ArgumentParser(description="SkyCharts LAN chart-pack agent")
+    parser = argparse.ArgumentParser(description="SkyCharts LAN chart-and-airport-map pack agent")
     parser.add_argument("--cookie-file", required=True, type=pathlib.Path)
     parser.add_argument("--host", default="0.0.0.0")
     parser.add_argument("--port", default=8770, type=int)

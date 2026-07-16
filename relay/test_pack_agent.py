@@ -14,12 +14,14 @@ class PackArchiveTests(unittest.TestCase):
             root = pathlib.Path(temporary)
             pack = root / "job"
             (pack / "charts" / "one").mkdir(parents=True)
+            (pack / "maps").mkdir(parents=True)
             (pack / "pack.json").write_text('{"packId":"test"}', encoding="utf-8")
             (pack / "charts" / "one" / "0-light.png").write_bytes(b"PNG")
+            (pack / "maps" / "KJFK.json").write_text('{"ident":"KJFK"}', encoding="utf-8")
             archive_path, count = agent.build_archive("job", pack)
-            self.assertEqual(count, 2)
+            self.assertEqual(count, 3)
             with tarfile.open(archive_path, "r:") as archive:
-                self.assertEqual(archive.getnames(), ["pack.json", "charts/one/0-light.png"])
+                self.assertEqual(archive.getnames(), ["pack.json", "charts/one/0-light.png", "maps/KJFK.json"])
                 self.assertEqual(archive.extractfile("charts/one/0-light.png").read(), b"PNG")
 
     def test_public_job_does_not_expose_mac_archive_path(self):

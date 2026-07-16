@@ -381,11 +381,10 @@ SkyCharts Mac Client
 2. Start Pack Agent for the iPad
 3. Download a country pack on this Mac
 4. Download selected airports
-5. Download an interactive airport map
-6. Install an existing pack over SSH
-7. Show reusable cache status
-8. Manage cached airport maps
-9. Manage cached chart assets
+5. Install an existing pack over SSH
+6. Show reusable cache status
+7. Manage cached airport maps
+8. Manage cached chart assets
 0. Quit
 """)
         choice = input("Choose an option: ").strip()
@@ -418,19 +417,14 @@ SkyCharts Mac Client
             workers = int(ask("Parallel chart workers", "8"))
             airports(cookie, idents, output, name, pack_id, workers)
         elif choice == "5":
-            ident = ask("Four-character airport ICAO code", "KJFK").upper()
-            output = ask("Output file", str(ROOT / "outputs" / (ident + "-airport-map.json")))
-            refresh = ask("Refresh cached OSM data? (y/N)", "N").lower().startswith("y")
-            airport_map(ident, output, refresh)
-        elif choice == "6":
             pack = ask("Pack directory", str(ROOT / "outputs"))
             host = ask("iPad IP address", "192.168.2.19")
             install(pack, host)
-        elif choice == "7":
+        elif choice == "6":
             cache_status()
-        elif choice == "8":
+        elif choice == "7":
             manage_airport_map_cache()
-        elif choice == "9":
+        elif choice == "8":
             manage_chart_cache()
         else:
             print("Unknown option.")

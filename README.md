@@ -15,15 +15,15 @@ SkyCharts provides:
 - Five compact chart categories: **STAR**, **SID**, **APP**, **TAXI**, and **MISC**.
 - Runway-grouped procedure lists and a collapsible chart sidebar.
 - Pinch-to-zoom, panning, automatic centering, and orientation-aware chart fitting.
-- Interactive offline airport maps with physically proportioned runways and aviation markings, repeated collision-aware taxiway identifiers, aprons, terminals, gates, and decluttered parking stands.
-- Zoom-aware airport-map detail: repeated runway and taxiway references at overview scale, then two decluttered stand and gate label tiers as the map is enlarged.
+- Interactive offline airport maps with physically proportioned runways and aviation markings, repeated collision-aware taxiway identifiers, aprons, terminals, gates, and parking stands.
+- A viewport-sized, zoom-aware label layer that repeats long taxiway references and reveals named gates and stands without rerendering the full airport bitmap during a gesture.
 - Touch inspection of airport-map features with ICAO references and available surface details.
 - Current METAR weather in raw and decoded views.
-- In-app chart downloads through a Mac on the same network.
+- In-app combined chart-and-map downloads through a Mac on the same network.
 - A geographic content manager with per-level storage usage and swipe-to-delete.
 - A reusable Mac cache and single-stream TAR transfers for large offline libraries.
 
-The app does not contain an Xbox login, planner cookie, relay, or web browser. A Mac downloads authorized chart assets from the planner, builds a local pack, and transfers that pack to the iPad. Interactive airport geometry is downloaded separately from OpenStreetMap and cached by the Mac. The app reads chart packs from `/var/mobile/Library/SkyCharts/ChartPacks` and vector maps from `/var/mobile/Library/SkyCharts/AirportMaps`. Version 0.8 automatically migrates packs and preferences from an existing AtlasSix installation.
+The app does not contain an Xbox login, planner cookie, relay, or web browser. A Mac downloads authorized chart assets from the planner and matching airport geometry from OpenStreetMap, then bundles both into one local pack and transfers it to the iPad. SkyCharts reads the complete package from `/var/mobile/Library/SkyCharts/ChartPacks`; legacy maps in `/var/mobile/Library/SkyCharts/AirportMaps` remain supported. Version 0.8 automatically migrates packs and preferences from an existing AtlasSix installation.
 
 The earlier `relay/` service remains as an optional compatibility prototype; it is not required for the offline workflow.
 
@@ -50,7 +50,7 @@ Tap the gear button in SkyCharts and choose one of these options:
 - **Download by Country** — enter a two-letter ISO 3166-1 code such as `CA`, `US`, `CN`, or `JP`.
 - **Download by ICAO Code** — enter one or more four-character airport codes separated by commas, such as `CYVR,CYYZ`.
 
-When prompted for the agent address, enter `http://MAC-LAN-IP:8770`, replacing `MAC-LAN-IP` with the Mac's address on the local network. SkyCharts displays build percentage, installation percentage, file count, and estimated remaining time. Keep the Mac agent running until the app reports that the chart pack is installed.
+When prompted for the agent address, enter `http://MAC-LAN-IP:8770`, replacing `MAC-LAN-IP` with the Mac's address on the local network. SkyCharts displays build percentage, installation percentage, file count, and estimated remaining time. Every requested airport pack includes its charts and interactive airport map; there is no separate map download. Keep the Mac agent running until the app reports that the package is installed.
 
 ### 3. Select an airport
 
@@ -72,11 +72,11 @@ Tap a category to display its chart list, then tap a chart name to open it. Proc
 
 Use two fingers to zoom and one finger to pan. Charts automatically refit and recenter after loading, rotating the iPad, or collapsing the list.
 
-### 5. Download and open an interactive airport map
+### 5. Open an interactive airport map
 
-Select an installed airport, keep the Mac Pack Agent running, then open the gear menu and choose **Download Airport Map**. Confirm the Mac agent address. SkyCharts downloads a compact offline vector map and opens it automatically.
+Select an installed airport and tap **MAP** beside the gear button. The compact offline vector map was installed with that airport's charts and does not require the Mac Pack Agent to remain running.
 
-Tap **MAP** beside the gear button whenever you want to reopen the installed map. Drag to pan, pinch to zoom, or tap **Fit** to show the entire airport. Runway geometry is merged into complete full-length surfaces and uses the source runway width to draw proportional pavement, edge lines, thresholds, centerlines, touchdown markings, aiming points, and designators. Collision-aware taxiway identifiers repeat by distance across every named taxiway, including routes split into many short source segments. Gate and stand identifiers use primary and deep-zoom decluttering tiers rendered into the map's single cached detail layer: they stay unobtrusive at the airport overview and reveal more named positions as you zoom without forcing a redraw during the gesture or allocating a second full-size map surface. Tap a runway, taxiway, parking stand, gate, apron, or terminal to inspect its available reference, name, and surface details.
+Drag to pan, pinch to zoom, or tap **Fit** to show the entire airport. Runway geometry is merged into complete full-length surfaces and uses the source runway width to draw proportional pavement, edge lines, thresholds, centerlines, touchdown markings, aiming points, and designators. Named taxiway identifiers are sampled along the complete polyline and repeated at a consistent screen-space interval, including routes split into multiple source segments. Gate and stand identifiers are drawn in a separate viewport-sized layer after a pan or zoom ends: overview labels remain readable, deeper zooms reveal the complete visible set of named positions, and pinch gestures avoid a full-map label redraw. Tap a runway, taxiway, parking stand, gate, apron, or terminal to inspect its available reference, name, and surface details.
 
 The first stage is a north-up airport diagram; it does not yet display ownship position, routing, traffic, or NOTAMs. Map detail depends on OpenStreetMap coverage for the selected airport.
 
@@ -211,7 +211,7 @@ The iPad uses an old SSH server, so modern OpenSSH needs RSA compatibility flags
 
 ```sh
 IP=192.168.2.19
-DEB=outputs/SkyCharts-0.13.3-ios6-armv7.deb
+DEB=outputs/SkyCharts-0.14.0-ios6-armv7.deb
 
 scp -O -o StrictHostKeyChecking=no \
   -o HostKeyAlgorithms=+ssh-rsa \
@@ -251,7 +251,7 @@ ssh -o HostKeyAlgorithms=+ssh-rsa -o PubkeyAcceptedAlgorithms=+ssh-rsa \
 
 ## Build an offline chart pack
 
-The downloader keeps reusable chart assets in `work/chart-cache`. Rebuilding a pack reuses cached pages and hard-links them into new output when possible. Light assets are downloaded by default. Interactive vector maps are cached separately in `work/airport-map-cache` for 30 days.
+The downloader keeps reusable chart assets in `work/chart-cache` and reusable vector maps in `work/airport-map-cache`. Rebuilding a pack reuses both caches and hard-links chart pages into new output when possible. Light chart assets are downloaded by default. Each exported pack contains both its charts and `maps/ICAO.json` vector-map assets.
 
 Selected airports:
 
@@ -288,21 +288,14 @@ The installer stages into a temporary directory, validates `pack.json`, and atom
 ./tools/skycharts
 ```
 
-The menu handles browser authentication, starts the Pack Agent, builds country or selected-airport packs, downloads interactive airport maps, installs packs over SSH, and reports both cache types.
+The menu handles browser authentication, starts the Pack Agent, builds combined chart-and-map country or selected-airport packs, installs packs over SSH, and reports both cache types.
 
 - Choose **Manage cached airport maps** to see each cached airport's name, size, feature count, stand count, and download date, then delete selected entries or clear the entire airport-map cache.
 - Choose **Manage cached chart assets** to search the chart cache by airport ICAO or name, inspect chart/page counts and logical size, delete selected airports, remove unidentified legacy entries, or clear the complete reusable chart cache. Shared chart GUIDs are retained while an unselected airport still references them.
 
 Both managers remove reusable cache entries only; exported packs, Pack Agent jobs, and content already installed on the iPad remain intact. Because chart pages may be hard-linked into an existing pack or Pack Agent job, the logical cache size removed can be larger than the immediately reclaimed disk space. If no cookie file exists, authenticated operations automatically offer browser login.
 
-Build or refresh an airport map directly:
-
-```sh
-python3 tools/skycharts_airport_map.py KJFK \
-  --output outputs/KJFK-airport-map.json
-```
-
-The downloader uses OpenStreetMap aviation features and writes a compact normalized JSON map. No additional Python package is required. SkyCharts displays the required OpenStreetMap attribution in the map footer. OpenStreetMap data is available under the [Open Database License](https://www.openstreetmap.org/copyright).
+The pack builder uses OpenStreetMap aviation features and writes a compact normalized JSON map into every airport entry. No additional Python package is required. SkyCharts displays the required OpenStreetMap attribution in the map footer. Only identifiers present in the source data are labelled; unnumbered parking-position geometry remains visible without an invented stand number. OpenStreetMap data is available under the [Open Database License](https://www.openstreetmap.org/copyright).
 
 ## In-app downloads through Pack Agent
 
