@@ -15,7 +15,7 @@ SkyCharts provides:
 - Five compact chart categories: **STAR**, **SID**, **APP**, **TAXI**, and **MISC**.
 - Runway-grouped procedure lists and a collapsible chart sidebar.
 - Pinch-to-zoom, panning, automatic centering, and orientation-aware chart fitting.
-- Interactive offline airport maps with runways, taxiways, aprons, terminals, gates, and parking stands.
+- Interactive offline airport maps with complete runways, repeated collision-aware taxiway identifiers, aprons, terminals, gates, and decluttered parking stands.
 - Zoom-aware airport-map detail: runway and taxiway references at overview scale, then stand and gate numbers when zoomed in.
 - Touch inspection of airport-map features with ICAO references and available surface details.
 - Current METAR weather in raw and decoded views.
@@ -76,7 +76,7 @@ Use two fingers to zoom and one finger to pan. Charts automatically refit and re
 
 Select an installed airport, keep the Mac Pack Agent running, then open the gear menu and choose **Download Airport Map**. Confirm the Mac agent address. SkyCharts downloads a compact offline vector map and opens it automatically.
 
-Tap **MAP** beside the gear button whenever you want to reopen the installed map. Drag to pan, pinch to zoom, or tap **Fit** to show the entire airport. Tap a runway, taxiway, parking stand, gate, apron, or terminal to inspect its available reference, name, and surface details.
+Tap **MAP** beside the gear button whenever you want to reopen the installed map. Drag to pan, pinch to zoom, or tap **Fit** to show the entire airport. Runway geometry is merged into complete full-length surfaces, and collision-aware taxiway identifiers repeat along longer taxiways. Gate and stand identifiers are decluttered and rendered into the map's single cached detail layer: they stay unobtrusive at the airport overview and become readable as you zoom without forcing a redraw during the gesture or allocating a second full-size map surface. Tap a runway, taxiway, parking stand, gate, apron, or terminal to inspect its available reference, name, and surface details.
 
 The first stage is a north-up airport diagram; it does not yet display ownship position, routing, traffic, or NOTAMs. Map detail depends on OpenStreetMap coverage for the selected airport.
 
@@ -211,7 +211,7 @@ The iPad uses an old SSH server, so modern OpenSSH needs RSA compatibility flags
 
 ```sh
 IP=192.168.2.19
-DEB=packages/com.skyning.skycharts_0.12.0-1+debug_iphoneos-arm.deb
+DEB=outputs/SkyCharts-0.13.0-ios6-armv7.deb
 
 scp -O -o StrictHostKeyChecking=no \
   -o HostKeyAlgorithms=+ssh-rsa \
