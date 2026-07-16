@@ -15,12 +15,14 @@ SkyCharts provides:
 - Five compact chart categories: **STAR**, **SID**, **APP**, **TAXI**, and **MISC**.
 - Runway-grouped procedure lists and a collapsible chart sidebar.
 - Pinch-to-zoom, panning, automatic centering, and orientation-aware chart fitting.
+- Interactive offline airport maps with runways, taxiways, aprons, terminals, gates, and parking stands.
+- Touch inspection of airport-map features with ICAO references and available surface details.
 - Current METAR weather in raw and decoded views.
 - In-app chart downloads through a Mac on the same network.
 - A geographic content manager with per-level storage usage and swipe-to-delete.
 - A reusable Mac cache and single-stream TAR transfers for large offline libraries.
 
-The app does not contain an Xbox login, planner cookie, relay, or web browser. A Mac downloads authorized chart assets from the planner, builds a local pack, and transfers that pack to the iPad. The app reads packs from `/var/mobile/Library/SkyCharts/ChartPacks`. Version 0.8 automatically migrates packs and preferences from an existing AtlasSix installation.
+The app does not contain an Xbox login, planner cookie, relay, or web browser. A Mac downloads authorized chart assets from the planner, builds a local pack, and transfers that pack to the iPad. Interactive airport geometry is downloaded separately from OpenStreetMap and cached by the Mac. The app reads chart packs from `/var/mobile/Library/SkyCharts/ChartPacks` and vector maps from `/var/mobile/Library/SkyCharts/AirportMaps`. Version 0.8 automatically migrates packs and preferences from an existing AtlasSix installation.
 
 The earlier `relay/` service remains as an optional compatibility prototype; it is not required for the offline workflow.
 
@@ -69,11 +71,19 @@ Tap a category to display its chart list, then tap a chart name to open it. Proc
 
 Use two fingers to zoom and one finger to pan. Charts automatically refit and recenter after loading, rotating the iPad, or collapsing the list.
 
-### 5. Check METAR weather
+### 5. Download and open an interactive airport map
+
+Select an installed airport, keep the Mac Pack Agent running, then open the gear menu and choose **Download Airport Map**. Confirm the Mac agent address. SkyCharts downloads a compact offline vector map and opens it automatically.
+
+Tap **MAP** beside the gear button whenever you want to reopen the installed map. Drag to pan, pinch to zoom, or tap **Fit** to show the entire airport. Tap a runway, taxiway, parking stand, gate, apron, or terminal to inspect its available reference, name, and surface details.
+
+The first stage is a north-up airport diagram; it does not yet display ownship position, routing, traffic, or NOTAMs. Map detail depends on OpenStreetMap coverage for the selected airport.
+
+### 6. Check METAR weather
 
 Tap **Wx** at the bottom-left. The weather window provides **Raw** and **Decoded** METAR views for the selected airport. Tap the refresh button to request the latest available observation. Weather requires an Internet connection even though installed charts work offline.
 
-### 6. Manage downloaded content
+### 7. Manage downloaded content
 
 Open the gear menu and choose **Manage Downloaded Content**. Expand the hierarchy:
 
@@ -81,9 +91,9 @@ Open the gear menu and choose **Manage Downloaded Content**. Expand the hierarch
 Continent → Country → State/Province/Region → City → Airport
 ```
 
-Each level shows its unique chart storage. The summary at the top shows total SkyCharts storage and free space remaining on the iPad. Swipe an airport, city, subdivision, country, or continent to delete all charts beneath that level. Multi-airport packs are rewritten safely so unrelated airports remain installed.
+Each level shows its unique chart and airport-map storage. The summary at the top shows total SkyCharts storage and free space remaining on the iPad. Swipe an airport, city, subdivision, country, or continent to delete all offline content beneath that level. Multi-airport packs are rewritten safely so unrelated airports remain installed.
 
-### 7. View application information
+### 8. View application information
 
 Open the gear menu and choose **About SkyCharts** to see the installed version, build number, developer credit, copyright, and project disclaimer.
 
@@ -200,7 +210,7 @@ The iPad uses an old SSH server, so modern OpenSSH needs RSA compatibility flags
 
 ```sh
 IP=192.168.2.19
-DEB=packages/com.skyning.skycharts_0.10.8-1+debug_iphoneos-arm.deb
+DEB=packages/com.skyning.skycharts_0.11.0-1+debug_iphoneos-arm.deb
 
 scp -O -o StrictHostKeyChecking=no \
   -o HostKeyAlgorithms=+ssh-rsa \
@@ -240,7 +250,7 @@ ssh -o HostKeyAlgorithms=+ssh-rsa -o PubkeyAcceptedAlgorithms=+ssh-rsa \
 
 ## Build an offline chart pack
 
-The downloader keeps reusable assets in `work/chart-cache`. Rebuilding a pack reuses cached pages and hard-links them into new output when possible. Light assets are downloaded by default.
+The downloader keeps reusable chart assets in `work/chart-cache`. Rebuilding a pack reuses cached pages and hard-links them into new output when possible. Light assets are downloaded by default. Interactive vector maps are cached separately in `work/airport-map-cache` for 30 days.
 
 Selected airports:
 
@@ -277,7 +287,16 @@ The installer stages into a temporary directory, validates `pack.json`, and atom
 ./tools/skycharts
 ```
 
-The menu handles browser authentication, starts the Pack Agent, builds country or selected-airport packs, installs packs over SSH, and reports cache status. If no cookie file exists, authenticated operations automatically offer browser login.
+The menu handles browser authentication, starts the Pack Agent, builds country or selected-airport packs, downloads interactive airport maps, installs packs over SSH, and reports both cache types. If no cookie file exists, authenticated operations automatically offer browser login.
+
+Build or refresh an airport map directly:
+
+```sh
+python3 tools/skycharts_airport_map.py KJFK \
+  --output outputs/KJFK-airport-map.json
+```
+
+The downloader uses OpenStreetMap aviation features and writes a compact normalized JSON map. No additional Python package is required. SkyCharts displays the required OpenStreetMap attribution in the map footer. OpenStreetMap data is available under the [Open Database License](https://www.openstreetmap.org/copyright).
 
 ## In-app downloads through Pack Agent
 

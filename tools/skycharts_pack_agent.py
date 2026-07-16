@@ -14,6 +14,8 @@ import urllib.parse
 import uuid
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
+import skycharts_airport_map
+
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 JOBS = {}
 LOCK = threading.Lock()
@@ -214,6 +216,14 @@ class Handler(BaseHTTPRequestHandler):
             if parsed.path == "/api/build-airports":
                 query = urllib.parse.parse_qs(parsed.query)
                 self.send_json(202, start_airport_job(query.get("idents", [""])[0]))
+                return
+            if parsed.path == "/api/airport-map":
+                query = urllib.parse.parse_qs(parsed.query)
+                ident = query.get("ident", [""])[0].strip().upper()
+                refresh = query.get("refresh", [""])[0] in ("1", "true", "yes")
+                result, cached = skycharts_airport_map.build_airport_map(ident, refresh=refresh)
+                result["cached"] = cached
+                self.send_json(200, result)
                 return
             if len(parts) == 3 and parts[:2] == ["api", "jobs"]:
                 with LOCK:

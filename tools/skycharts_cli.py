@@ -43,6 +43,13 @@ def install(pack, host):
     return run([PYTHON, ROOT / "tools" / "skycharts_downloader.py", "install", pack, "--host", host])
 
 
+def airport_map(ident, output, refresh=False):
+    command = [PYTHON, ROOT / "tools" / "skycharts_airport_map.py", ident.upper(), "--output", output]
+    if refresh:
+        command.append("--refresh")
+    return run(command)
+
+
 def cache_status():
     index = ROOT / "work" / "chart-cache" / "index.json"
     if not index.exists():
@@ -53,6 +60,11 @@ def cache_status():
     print("\nCached charts: %d" % len(charts))
     print("Cached pages:  %d" % sum(item.get("pages", 0) for item in charts))
     subprocess.call(["du", "-sh", str(index.parent)])
+    map_cache = ROOT / "work" / "airport-map-cache"
+    maps = list(map_cache.glob("*.json")) if map_cache.exists() else []
+    print("Cached airport maps: %d" % len(maps))
+    if maps:
+        subprocess.call(["du", "-sh", str(map_cache)])
     print()
 
 
@@ -74,8 +86,9 @@ SkyCharts Mac Client
 2. Start Pack Agent for the iPad
 3. Download a country pack on this Mac
 4. Download selected airports
-5. Install an existing pack over SSH
-6. Show reusable cache status
+5. Download an interactive airport map
+6. Install an existing pack over SSH
+7. Show reusable cache status
 0. Quit
 """)
         choice = input("Choose an option: ").strip()
@@ -108,10 +121,15 @@ SkyCharts Mac Client
             workers = int(ask("Parallel chart workers", "8"))
             airports(cookie, idents, output, name, pack_id, workers)
         elif choice == "5":
+            ident = ask("Four-character airport ICAO code", "KJFK").upper()
+            output = ask("Output file", str(ROOT / "outputs" / (ident + "-airport-map.json")))
+            refresh = ask("Refresh cached OSM data? (y/N)", "N").lower().startswith("y")
+            airport_map(ident, output, refresh)
+        elif choice == "6":
             pack = ask("Pack directory", str(ROOT / "outputs"))
             host = ask("iPad IP address", "192.168.2.19")
             install(pack, host)
-        elif choice == "6":
+        elif choice == "7":
             cache_status()
         else:
             print("Unknown option.")
