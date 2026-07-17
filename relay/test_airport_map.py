@@ -171,6 +171,57 @@ END_POLYGON
         self.assertEqual(raw["elements"][0]["tags"]["building"], "terminal")
         self.assertEqual(raw["elements"][0]["geometry"][0], raw["elements"][0]["geometry"][-1])
 
+    def test_gateway_terminals_use_ground_footprints_and_gate_proximity(self):
+        dsf_text = """PROPERTY sim/overlay 1
+POLYGON_DEF lib/airport/Modern_Airports/Terminal_kit/term_building_Ground_01.fac
+POLYGON_DEF lib/airport/Modern_Airports/Terminal_kit/term_building_Levels_01.fac
+POLYGON_DEF lib/airport/Modern_Airports/Facades/modern2.fac
+BEGIN_POLYGON 0 0 2
+BEGIN_WINDING
+POLYGON_POINT -73.0000 45.0000
+POLYGON_POINT -72.9990 45.0000
+POLYGON_POINT -72.9990 45.0010
+POLYGON_POINT -73.0000 45.0010
+END_WINDING
+END_POLYGON
+BEGIN_POLYGON 1 0 2
+BEGIN_WINDING
+POLYGON_POINT -73.0000 45.0000
+POLYGON_POINT -72.9990 45.0000
+POLYGON_POINT -72.9990 45.0010
+POLYGON_POINT -73.0000 45.0010
+END_WINDING
+END_POLYGON
+BEGIN_POLYGON 2 0 2
+BEGIN_WINDING
+POLYGON_POINT -72.9800 45.0200
+POLYGON_POINT -72.9790 45.0200
+POLYGON_POINT -72.9790 45.0210
+POLYGON_POINT -72.9800 45.0210
+END_WINDING
+END_POLYGON
+"""
+        anchors = [{"lat": 45.0005, "lon": -72.9995}]
+        raw = airport_map.parse_xplane_dsf_terminals(dsf_text, anchors=anchors)
+        self.assertEqual(len(raw["elements"]), 1)
+        self.assertEqual(raw["elements"][0]["tags"]["building"], "terminal")
+
+    def test_gateway_generic_modern_facade_recovers_older_terminal(self):
+        dsf_text = """PROPERTY sim/overlay 1
+POLYGON_DEF lib/airport/Modern_Airports/Facades/modern2.fac
+BEGIN_POLYGON 0 0 2
+BEGIN_WINDING
+POLYGON_POINT -73.0000 45.0000
+POLYGON_POINT -72.9980 45.0000
+POLYGON_POINT -72.9980 45.0020
+POLYGON_POINT -73.0000 45.0020
+END_WINDING
+END_POLYGON
+"""
+        raw = airport_map.parse_xplane_dsf_terminals(
+            dsf_text, anchors=[{"lat": 45.0010, "lon": -72.9990}])
+        self.assertEqual(len(raw["elements"]), 1)
+
     def test_build_uses_gateway_when_overpass_is_unavailable(self):
         gateway = {
             "elements": [{

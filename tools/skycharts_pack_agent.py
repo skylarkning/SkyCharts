@@ -194,7 +194,7 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
         with target.open("rb") as handle:
             while True:
-                chunk = handle.read(256 * 1024)
+                chunk = handle.read(1024 * 1024)
                 if not chunk:
                     break
                 self.wfile.write(chunk)

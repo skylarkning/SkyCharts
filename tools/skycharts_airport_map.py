@@ -33,7 +33,7 @@ OVERPASS_REQUEST_TIMEOUT = 20
 OVERPASS_FAILURE_COOLDOWN = 180
 OVERPASS_BUSY_WAIT = 25
 OSM_SOURCE_REVISION = 2
-XPLANE_SOURCE_REVISION = 3
+XPLANE_SOURCE_REVISION = 4
 XPLANE_GATEWAY_AIRPORT_URL = "https://gateway.x-plane.com/apiv1/airport/{ident}"
 XPLANE_GATEWAY_SCENERY_URL = "https://gateway.x-plane.com/apiv1/scenery/{scenery_id}"
 XPLANE_GATEWAY_SOURCE_URL = "https://gateway.x-plane.com/"
@@ -644,13 +644,67 @@ def xplane_polygon_area(points):
 
 
 def xplane_terminal_definition(path):
+    """Return true only for facade definitions that describe a ground footprint.
+
+    Gateway airports commonly build one terminal from separate ground, upper-level,
+    roof, bridge, and detail facades.  Treating every layer as a footprint produces
+    the hundreds of overlapping polygons seen at CYVR.  Older Gateway scenery such
+    as CYUL instead uses the generic modern/classic airport facades, so those must be
+    accepted too.
+    """
     value = path.strip().lower()
-    return ("/terminal_kit/term_building" in value
+    return ("/terminal_kit/term_building_ground_" in value
+            or "/terminal_kit/term_building_bighall_" in value
+            or "/modern_airports/facades/modern" in value
+            or "/classic_airports/facades/classic" in value
             or "/buildings/terminals/" in value
             or "/terminal/building" in value)
 
 
-def parse_xplane_dsf_terminals(text):
+def xplane_distance_metres(left, right, latitude):
+    north = (left["lat"] - right["lat"]) * 111320.0
+    east = ((left["lon"] - right["lon"]) * 111320.0
+            * max(0.2, math.cos(math.radians(latitude))))
+    return math.hypot(east, north)
+
+
+def xplane_point_to_segment_metres(point, start, end, latitude):
+    scale = max(0.2, math.cos(math.radians(latitude)))
+    px, py = point["lon"] * scale, point["lat"]
+    ax, ay = start["lon"] * scale, start["lat"]
+    bx, by = end["lon"] * scale, end["lat"]
+    dx, dy = bx - ax, by - ay
+    length = dx * dx + dy * dy
+    if length <= 1e-20:
+        return xplane_distance_metres(point, start, latitude)
+    fraction = max(0.0, min(1.0, ((px - ax) * dx + (py - ay) * dy) / length))
+    nearest = {"lon": (ax + fraction * dx) / scale, "lat": ay + fraction * dy}
+    return xplane_distance_metres(point, nearest, latitude)
+
+
+def xplane_terminal_distance(points, anchors):
+    if not points or not anchors:
+        return float("inf")
+    latitude = sum(point["lat"] for point in points) / len(points)
+    best = float("inf")
+    for anchor in anchors:
+        for index in range(1, len(points)):
+            best = min(best, xplane_point_to_segment_metres(
+                anchor, points[index - 1], points[index], latitude))
+            if best <= 12:
+                return best
+    return best
+
+
+def xplane_polygon_area_metres(points):
+    if len(points) < 3:
+        return 0
+    latitude = sum(point["lat"] for point in points) / len(points)
+    return (abs(xplane_polygon_area(points)) * 111320.0 * 111320.0
+            * max(0.2, math.cos(math.radians(latitude))))
+
+
+def parse_xplane_dsf_terminals(text, anchors=None):
     lines = [line.strip() for line in text.splitlines() if line.strip()]
     definitions = [line.split(None, 1)[1] for line in lines
                    if line.startswith("POLYGON_DEF ") and len(line.split(None, 1)) == 2]
@@ -674,10 +728,14 @@ def parse_xplane_dsf_terminals(text):
         if signature in seen:
             return
         seen.add(signature)
+        area = xplane_polygon_area_metres(points)
+        if area < 60:
+            return
         elements.append({
             "type": "way", "id": "xplane-terminal-%d" % (len(elements) + 1),
             "tags": {"building": "terminal", "operator": "X-Plane Scenery Gateway"},
             "geometry": points,
+            "xplaneArea": area,
         })
 
     for line in lines:
@@ -709,6 +767,19 @@ def parse_xplane_dsf_terminals(text):
             active, rings, winding = False, [], None
     if active:
         finish_polygon()
+    anchors = list(anchors or [])
+    if anchors:
+        # Passenger terminals border gates and ramp starts.  A generous distance
+        # retains long concourses while rejecting unrelated terminal-kit buildings.
+        elements = [element for element in elements
+                    if xplane_terminal_distance(element["geometry"], anchors) <= 140]
+    elif len(elements) > 24:
+        # Airports without named ramps cannot be proximity-filtered.  Keep a bounded
+        # set of the most substantial footprints instead of shipping every facade.
+        elements = sorted(elements, key=lambda value: value.get("xplaneArea", 0), reverse=True)[:24]
+    for index, element in enumerate(elements, 1):
+        element["id"] = "xplane-terminal-%d" % index
+        element.pop("xplaneArea", None)
     return {"elements": elements}
 
 
@@ -717,7 +788,9 @@ def xplane_gateway_raw(ident):
     raw = parse_xplane_apt(apt_text, ident)
     dsf_text = metadata.pop("dsfText", "")
     if dsf_text:
-        terminals = parse_xplane_dsf_terminals(dsf_text)
+        anchors = [element for element in raw["elements"]
+                   if feature_kind(element.get("tags") or {}) in ("gate", "parking_position")]
+        terminals = parse_xplane_dsf_terminals(dsf_text, anchors=anchors)
         raw["elements"].extend(terminals["elements"])
         metadata["terminalCount"] = len(terminals["elements"])
     raw["gateway"] = metadata

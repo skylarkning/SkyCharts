@@ -6,8 +6,10 @@
     NSString *_jobID;
     NSString *_incomingPath;
     NSString *_errorText;
+    NSString *_currentRelativePath;
+    NSString *_lastDirectory;
     NSMutableData *_headerBuffer;
-    NSFileHandle *_outputHandle;
+    NSMutableSet *_extractedPaths;
     NSURLConnection *_connection;
     id _progressTarget;
     SEL _progressSelector;
@@ -23,6 +25,7 @@
     BOOL _networkOK;
     BOOL _archiveOK;
     BOOL _sawArchiveEnd;
+    int _outputFD;
 }
 - (id)initWithURL:(NSURL *)url chartRoot:(NSString *)root jobID:(NSString *)jobID expectedBytes:(long long)bytes expectedFiles:(NSUInteger)files progressTarget:(id)target selector:(SEL)selector;
 - (BOOL)run;
