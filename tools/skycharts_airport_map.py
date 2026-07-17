@@ -434,6 +434,27 @@ def extract_xplane_apt(zip_payload, ident):
         return payload.decode("latin-1"), entry.filename
 
 
+def extract_xplane_dsf_text(zip_payload, ident):
+    try:
+        with zipfile.ZipFile(io.BytesIO(zip_payload)) as archive:
+            candidates = [entry for entry in archive.infolist()
+                          if not entry.is_dir() and entry.filename.lower().endswith(".txt")
+                          and entry.file_size <= 20 * 1024 * 1024]
+            preferred = [entry for entry in candidates
+                         if pathlib.PurePosixPath(entry.filename).name.upper() == ident.upper() + ".TXT"]
+            for entry in preferred + [entry for entry in candidates if entry not in preferred]:
+                payload = archive.read(entry)
+                try:
+                    text = payload.decode("utf-8-sig")
+                except UnicodeDecodeError:
+                    text = payload.decode("latin-1")
+                if "POLYGON_DEF " in text and "BEGIN_POLYGON " in text:
+                    return text, entry.filename
+    except zipfile.BadZipFile:
+        return None, None
+    return None, None
+
+
 def fetch_xplane_gateway_apt(ident):
     airport_response = request_xplane_json(XPLANE_GATEWAY_AIRPORT_URL.format(ident=urllib.parse.quote(ident)))
     airport = airport_response.get("airport") if isinstance(airport_response, dict) else None
@@ -456,9 +477,12 @@ def fetch_xplane_gateway_apt(ident):
     except (TypeError, ValueError) as error:
         raise XPlaneGatewayUnavailableError("X-Plane scenery archive could not be decoded: %s" % error)
     apt_text, apt_name = extract_xplane_apt(zip_payload, ident)
+    dsf_text, dsf_name = extract_xplane_dsf_text(zip_payload, ident)
     return apt_text, {
         "sceneryId": identifier,
         "aptName": apt_name,
+        "dsfName": dsf_name or "",
+        "dsfText": dsf_text or "",
         "artist": scenery.get("userName") or scenery.get("artist") or "",
         "approvedAt": scenery.get("dateApproved") or "",
     }
@@ -472,6 +496,11 @@ def xplane_surface_name(value):
     }.get(str(value), str(value))
 
 
+def xplane_is_apron_pavement(name):
+    value = str(name or "").strip().lower()
+    return any(word in value for word in ("apron", "ramp", "parking"))
+
+
 def parse_xplane_apt(text, ident):
     ident = ident.strip().upper()
     elements, taxi_nodes, taxi_edges = [], {}, []
@@ -481,6 +510,9 @@ def parse_xplane_apt(text, ident):
     def add_polygon(close=False):
         nonlocal polygon_points, serial
         if len(polygon_points) < 3:
+            polygon_points = []
+            return
+        if not xplane_is_apron_pavement(polygon_name):
             polygon_points = []
             return
         points = list(polygon_points)
@@ -581,9 +613,91 @@ def parse_xplane_apt(text, ident):
     return {"elements": elements}
 
 
+def xplane_polygon_area(points):
+    area = 0
+    for index, point in enumerate(points):
+        following = points[(index + 1) % len(points)]
+        area += point["lon"] * following["lat"] - following["lon"] * point["lat"]
+    return area / 2
+
+
+def xplane_terminal_definition(path):
+    value = path.strip().lower()
+    return ("/terminal_kit/term_building" in value
+            or "/buildings/terminals/" in value
+            or "/terminal/building" in value)
+
+
+def parse_xplane_dsf_terminals(text):
+    lines = [line.strip() for line in text.splitlines() if line.strip()]
+    definitions = [line.split(None, 1)[1] for line in lines
+                   if line.startswith("POLYGON_DEF ") and len(line.split(None, 1)) == 2]
+    elements, seen = [], set()
+    active, rings, winding = False, [], None
+
+    def finish_polygon():
+        nonlocal rings, winding
+        if winding and len(winding) >= 3:
+            rings.append(winding)
+        winding = None
+        if not rings:
+            return
+        points = max(rings, key=lambda value: abs(xplane_polygon_area(value)))
+        rings = []
+        if len(points) < 3:
+            return
+        if points[0] != points[-1]:
+            points = points + [dict(points[0])]
+        signature = tuple((round(point["lat"], 6), round(point["lon"], 6)) for point in points)
+        if signature in seen:
+            return
+        seen.add(signature)
+        elements.append({
+            "type": "way", "id": "xplane-terminal-%d" % (len(elements) + 1),
+            "tags": {"building": "terminal", "operator": "X-Plane Scenery Gateway"},
+            "geometry": points,
+        })
+
+    for line in lines:
+        values = line.split()
+        code = values[0]
+        if code == "BEGIN_POLYGON" and len(values) >= 2:
+            finish_polygon()
+            try:
+                definition = definitions[int(values[1])]
+            except (IndexError, TypeError, ValueError):
+                definition = ""
+            active = xplane_terminal_definition(definition)
+        elif code == "BEGIN_WINDING" and active:
+            if winding and len(winding) >= 3:
+                rings.append(winding)
+            winding = []
+        elif code == "POLYGON_POINT" and active and winding is not None and len(values) >= 3:
+            try:
+                winding.append({"lon": float(values[1]), "lat": float(values[2])})
+            except ValueError:
+                continue
+        elif code == "END_WINDING" and active:
+            if winding and len(winding) >= 3:
+                rings.append(winding)
+            winding = None
+        elif code == "END_POLYGON":
+            if active:
+                finish_polygon()
+            active, rings, winding = False, [], None
+    if active:
+        finish_polygon()
+    return {"elements": elements}
+
+
 def xplane_gateway_raw(ident):
     apt_text, metadata = fetch_xplane_gateway_apt(ident)
     raw = parse_xplane_apt(apt_text, ident)
+    dsf_text = metadata.pop("dsfText", "")
+    if dsf_text:
+        terminals = parse_xplane_dsf_terminals(dsf_text)
+        raw["elements"].extend(terminals["elements"])
+        metadata["terminalCount"] = len(terminals["elements"])
     raw["gateway"] = metadata
     return raw
 
@@ -746,7 +860,13 @@ def build_airport_map(ident, cache_dir=None, refresh=False, radius=5500, maximum
     if not refresh and cache_path.is_file():
         cached = json.loads(cache_path.read_text(encoding="utf-8"))
         cache_days = min(maximum_age_days, 1) if cached.get("source") == "OurAirports" else maximum_age_days
-        if cache_is_fresh(cache_path, cache_days):
+        try:
+            gateway_revision = int(cached.get("sourceRevision") or 0)
+        except (TypeError, ValueError):
+            gateway_revision = 0
+        gateway_outdated = ("X-Plane Scenery Gateway" in str(cached.get("source") or "")
+                            and gateway_revision < 3)
+        if not gateway_outdated and cache_is_fresh(cache_path, cache_days):
             cached["counts"] = feature_counts(cached.get("features", []))
             return cached, True
     if not refresh:
@@ -804,6 +924,7 @@ def build_airport_map(ident, cache_dir=None, refresh=False, radius=5500, maximum
             source = " + ".join(sources)
             gateway_result = normalize({"elements": gateway_elements}, airport, source=source,
                                        source_url=XPLANE_GATEWAY_SOURCE_URL)
+            gateway_result["sourceRevision"] = 3
             if result is None or map_detail_score(gateway_result) > map_detail_score(result):
                 result = gateway_result
         except XPlaneGatewayNoDataError as error:

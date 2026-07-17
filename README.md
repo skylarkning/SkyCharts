@@ -78,7 +78,7 @@ Select an installed airport and tap **MAP** beside the gear button. The compact 
 
 Drag to pan, pinch to zoom, or tap **Fit** to show the entire airport. Runway geometry is merged into complete full-length surfaces and uses the source runway width to draw proportional pavement, edge lines, thresholds, centerlines, touchdown markings, and aiming points. Runway designator badges remain a fixed readable size instead of enlarging with the underlying map. Named taxiway identifiers are sampled along the complete polyline and repeated at a consistent screen-space interval, including routes split into multiple source segments. The display-linked label layer follows the geometry during the gesture itself; progressively more taxiway, stand, and gate labels fade in as detail increases, while available `Terminal X` names remain visible at every zoom level. Grey taxiway pavement retains its natural map scale, while the independent yellow vector centerline adjusts continuously to maintain a fine screen-relative weight. Off-screen label geometry is culled and projected coordinates are cached to keep legacy iPads responsive. Tap a runway, taxiway, parking stand, gate, apron, or terminal to inspect its available reference, name, and surface details.
 
-The first stage is a north-up airport diagram; it does not yet display ownship position, routing, traffic, or NOTAMs. Map detail depends on the best airport geometry available from OpenStreetMap or the X-Plane Scenery Gateway. The final OurAirports fallback supplies a correctly positioned runway diagram when neither detailed source has an airport layout.
+The first stage is a north-up airport diagram; it does not yet display ownship position, routing, traffic, or NOTAMs. Map detail depends on the best airport geometry available from OpenStreetMap or the X-Plane Scenery Gateway. Gateway DSF-text terminal facades are rendered as terminal footprints, but they remain unlabelled unless OpenStreetMap supplies a real terminal designator; the Gateway export does not reliably preserve names such as `Terminal 1`. Generic X-Plane `New Taxiway` pavement polygons are excluded so they cannot cover the airport with a grey background. Taxi-route geometry supplies the normal grey taxi pavement and yellow centerline, while explicitly named apron/ramp polygons may still be retained. The final OurAirports fallback supplies a correctly positioned runway diagram when neither detailed source has an airport layout.
 
 ### 6. Check METAR weather
 
@@ -211,7 +211,7 @@ The iPad uses an old SSH server, so modern OpenSSH needs RSA compatibility flags
 
 ```sh
 IP=192.168.2.19
-DEB=outputs/SkyCharts-0.15.0-ios6-armv7.deb
+DEB=outputs/SkyCharts-0.15.1-ios6-armv7.deb
 
 scp -O -o StrictHostKeyChecking=no \
   -o HostKeyAlgorithms=+ssh-rsa \
@@ -298,7 +298,7 @@ The pack builder writes a compact normalized JSON map into every airport entry a
 
 1. Reuse a fresh normalized map from `work/airport-map-cache`.
 2. Request detailed aviation geometry from a currently operating [OpenStreetMap Overpass](https://wiki.openstreetmap.org/wiki/Overpass_API) instance.
-3. If OpenStreetMap is unavailable or lacks usable taxiway/stand detail, download the airport's recommended scenery from the official [X-Plane Scenery Gateway](https://gateway.x-plane.com/) and convert its embedded `apt.dat` runways, pavement polygons, taxi routes, gates, and ramp starts. When both detailed sources work, SkyCharts keeps the more complete result.
+3. If OpenStreetMap is unavailable or lacks usable taxiway/stand detail, download the airport's recommended scenery from the official [X-Plane Scenery Gateway](https://gateway.x-plane.com/) and convert its embedded `apt.dat` runways, taxi routes, gates, ramp starts, named aprons, and DSF-text terminal facades. Airport-wide generic pavement polygons are filtered out. When both detailed sources work, SkyCharts keeps the more complete result and retains useful OSM terminal/hangar geometry.
 4. If neither detailed source has a layout, create a runway-only map from [OurAirports](https://ourairports.com/data/).
 
 X-Plane itself does **not** need to be installed. Gateway scenery is requested per ICAO code and the converted result is stored in SkyCharts' normal reusable cache. Failed public services enter a short process-wide cooldown, while an airport confirmed to have no geometry receives a temporary negative-cache marker. This keeps a large country build from repeating the same nine feature requests and timeouts for every airport. The map cache manager ignores these markers and removes the corresponding marker whenever that airport's cached package is deleted.

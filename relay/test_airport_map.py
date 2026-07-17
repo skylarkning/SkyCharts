@@ -72,6 +72,10 @@ class AirportMapTests(unittest.TestCase):
 111 28.8500 115.9000
 111 28.8510 115.9000
 113 28.8510 115.9010
+110 1 0.25 0 New Taxiway 10
+111 28.8400 115.8900
+111 28.8800 115.8900
+113 28.8800 115.9200
 1201 28.8500 115.9000 both 1 start
 1201 28.8510 115.9010 both 2 end
 1202 1 2 twoway taxiway_E J1
@@ -97,6 +101,37 @@ class AirportMapTests(unittest.TestCase):
         text, name = airport_map.extract_xplane_apt(buffer.getvalue(), "ZSCN")
         self.assertIn("ZSCN Test Airport", text)
         self.assertEqual(name, "ZSCN.dat")
+
+    def test_extracts_and_parses_gateway_terminal_facades(self):
+        dsf_text = """PROPERTY sim/overlay 1
+POLYGON_DEF lib/airport/Modern_Airports/Terminal_kit/term_building_Ground_01.fac
+POLYGON_DEF lib/airport/ground/pavement/concrete.pol
+BEGIN_POLYGON 0 383 2
+BEGIN_WINDING
+POLYGON_POINT 115.9000 28.8500
+POLYGON_POINT 115.9010 28.8500
+POLYGON_POINT 115.9010 28.8510
+POLYGON_POINT 115.9000 28.8510
+END_WINDING
+END_POLYGON
+BEGIN_POLYGON 1 0 2
+BEGIN_WINDING
+POLYGON_POINT 115.9100 28.8600
+POLYGON_POINT 115.9110 28.8600
+POLYGON_POINT 115.9110 28.8610
+END_WINDING
+END_POLYGON
+"""
+        buffer = io.BytesIO()
+        with zipfile.ZipFile(buffer, "w") as archive:
+            archive.writestr("ZSCN.dat", "1 143 0 0 ZSCN Test Airport\n")
+            archive.writestr("ZSCN.txt", dsf_text)
+        text, name = airport_map.extract_xplane_dsf_text(buffer.getvalue(), "ZSCN")
+        self.assertEqual(name, "ZSCN.txt")
+        raw = airport_map.parse_xplane_dsf_terminals(text)
+        self.assertEqual(len(raw["elements"]), 1)
+        self.assertEqual(raw["elements"][0]["tags"]["building"], "terminal")
+        self.assertEqual(raw["elements"][0]["geometry"][0], raw["elements"][0]["geometry"][-1])
 
     def test_build_uses_gateway_when_overpass_is_unavailable(self):
         gateway = {
