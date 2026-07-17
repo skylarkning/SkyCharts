@@ -1,7 +1,10 @@
 import io
+import json
 import pathlib
 import sys
 import tempfile
+import threading
+import time
 import unittest
 import zipfile
 from unittest import mock
@@ -45,6 +48,41 @@ class AirportMapTests(unittest.TestCase):
         query = airport_map.overpass_query(40.0, -73.0)
         for value in ("runway", "taxiway", "apron", "parking_position"):
             self.assertIn(value, query)
+        self.assertIn('way["building"="terminal"]', query)
+        self.assertIn('relation["building"="terminal"]', query)
+        self.assertIn("out body geom", query)
+
+    def test_normalizes_split_terminal_multipolygon_relations(self):
+        raw = {"elements": [{
+            "type": "relation", "id": 91,
+            "tags": {"type": "multipolygon", "building": "terminal", "name": "Terminal 3"},
+            "members": [
+                {"type": "way", "role": "outer", "geometry": [
+                    {"lat": 40.0, "lon": -73.0}, {"lat": 40.0, "lon": -72.9},
+                ]},
+                {"type": "way", "role": "outer", "geometry": [
+                    {"lat": 40.1, "lon": -72.9}, {"lat": 40.1, "lon": -73.0},
+                ]},
+                {"type": "way", "role": "outer", "geometry": [
+                    {"lat": 40.0, "lon": -72.9}, {"lat": 40.1, "lon": -72.9},
+                ]},
+                {"type": "way", "role": "outer", "geometry": [
+                    {"lat": 40.1, "lon": -73.0}, {"lat": 40.0, "lon": -73.0},
+                ]},
+                {"type": "way", "role": "inner", "geometry": [
+                    {"lat": 40.02, "lon": -72.98}, {"lat": 40.02, "lon": -72.96},
+                    {"lat": 40.04, "lon": -72.96}, {"lat": 40.02, "lon": -72.98},
+                ]},
+            ],
+        }]}
+        result = airport_map.normalize(raw, {
+            "ident": "TEST", "name": "Test Airport", "latitude": 40.0, "longitude": -73.0,
+        })
+        terminal = result["features"][0]
+        self.assertEqual(result["counts"]["terminal"], 1)
+        self.assertEqual(terminal["label"], "Terminal 3")
+        self.assertTrue(terminal["closed"])
+        self.assertEqual(len(terminal["points"]), 5)
 
     def test_terminal_labels_require_an_available_designator(self):
         self.assertEqual(airport_map.terminal_label({"ref": "T2", "name": "Domestic Terminal"}), "Terminal 2")
@@ -151,11 +189,75 @@ END_POLYGON
         self.assertEqual(result["source"], "X-Plane Scenery Gateway")
         self.assertEqual(result["counts"]["runway"], 1)
 
+    def test_build_refreshes_an_osm_cache_from_before_terminal_relation_support(self):
+        old_cache = {
+            "schemaVersion": 1,
+            "ident": "CYYZ",
+            "source": "OpenStreetMap contributors",
+            "features": [{
+                "kind": "runway", "ref": "05/23",
+                "points": [[-79.64, 43.67], [-79.60, 43.69]],
+            }],
+        }
+        fresh_raw = {"elements": [{
+            "type": "way", "id": 1, "tags": {"aeroway": "runway", "ref": "05/23"},
+            "geometry": [{"lat": 43.67, "lon": -79.64}, {"lat": 43.69, "lon": -79.60}],
+        }, {
+            "type": "way", "id": 2, "tags": {"building": "terminal", "name": "Terminal 3"},
+            "geometry": [
+                {"lat": 43.68, "lon": -79.63}, {"lat": 43.68, "lon": -79.62},
+                {"lat": 43.69, "lon": -79.62}, {"lat": 43.68, "lon": -79.63},
+            ],
+        }]}
+        with tempfile.TemporaryDirectory() as temporary:
+            cache_path = pathlib.Path(temporary) / "CYYZ.json"
+            cache_path.write_text(json.dumps(old_cache), encoding="utf-8")
+            with mock.patch.object(airport_map, "airport_record", return_value={
+                    "ident": "CYYZ", "name": "Toronto Pearson", "latitude": 43.68, "longitude": -79.63,
+                    }), \
+                    mock.patch.object(airport_map, "fetch_overpass", return_value=fresh_raw), \
+                    mock.patch.object(airport_map, "xplane_gateway_raw",
+                                      side_effect=airport_map.XPlaneGatewayNoDataError("none")) as gateway:
+                result, cached = airport_map.build_airport_map("CYYZ", cache_dir=temporary)
+        self.assertFalse(cached)
+        self.assertEqual(result["osmRevision"], airport_map.OSM_SOURCE_REVISION)
+        self.assertEqual(result["counts"]["terminal"], 1)
+        gateway.assert_called_once()
+
     def test_overpass_failure_uses_one_combined_query(self):
         with mock.patch.object(airport_map, "request_overpass", side_effect=airport_map.OverpassUnavailableError("offline")) as request:
             with self.assertRaises(airport_map.OverpassUnavailableError):
                 airport_map.fetch_overpass(40, -73)
         request.assert_called_once()
+
+    def test_overpass_waits_briefly_for_an_in_flight_endpoint(self):
+        endpoint = "https://overpass.example/api/interpreter"
+        response = mock.MagicMock()
+        response.__enter__.return_value.read.return_value = b'{"elements":[]}'
+        with airport_map._ENDPOINT_CONDITION:
+            airport_map._ENDPOINT_RETRY_AFTER.pop(endpoint, None)
+            airport_map._ENDPOINT_IN_FLIGHT.add(endpoint)
+
+        def release_endpoint():
+            with airport_map._ENDPOINT_CONDITION:
+                airport_map._ENDPOINT_IN_FLIGHT.discard(endpoint)
+                airport_map._ENDPOINT_CONDITION.notify_all()
+
+        timer = threading.Timer(0.03, release_endpoint)
+        timer.start()
+        started = time.monotonic()
+        try:
+            with mock.patch.object(airport_map, "OVERPASS_BUSY_WAIT", 0.25), \
+                    mock.patch.object(airport_map.urllib.request, "urlopen", return_value=response) as urlopen:
+                result = airport_map.request_overpass("[out:json];out;", (endpoint,), timeout=0.1)
+        finally:
+            timer.join()
+            with airport_map._ENDPOINT_CONDITION:
+                airport_map._ENDPOINT_IN_FLIGHT.discard(endpoint)
+                airport_map._ENDPOINT_RETRY_AFTER.pop(endpoint, None)
+        self.assertEqual(result, {"elements": []})
+        self.assertGreaterEqual(time.monotonic() - started, 0.02)
+        urlopen.assert_called_once()
 
 
 if __name__ == "__main__":

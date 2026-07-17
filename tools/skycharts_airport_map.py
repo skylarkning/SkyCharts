@@ -31,6 +31,9 @@ OVERPASS_ENDPOINTS = (
 )
 OVERPASS_REQUEST_TIMEOUT = 20
 OVERPASS_FAILURE_COOLDOWN = 180
+OVERPASS_BUSY_WAIT = 25
+OSM_SOURCE_REVISION = 2
+XPLANE_SOURCE_REVISION = 3
 XPLANE_GATEWAY_AIRPORT_URL = "https://gateway.x-plane.com/apiv1/airport/{ident}"
 XPLANE_GATEWAY_SCENERY_URL = "https://gateway.x-plane.com/apiv1/scenery/{scenery_id}"
 XPLANE_GATEWAY_SOURCE_URL = "https://gateway.x-plane.com/"
@@ -70,6 +73,7 @@ class XPlaneGatewayNoDataError(AirportMapError):
 _DATASET_LOCK = threading.Lock()
 _INDEX_LOCK = threading.Lock()
 _ENDPOINT_LOCK = threading.Lock()
+_ENDPOINT_CONDITION = threading.Condition(_ENDPOINT_LOCK)
 _AIRPORT_INDEX = {}
 _RUNWAY_INDEX = {}
 _ENDPOINT_RETRY_AFTER = {}
@@ -151,11 +155,18 @@ def overpass_query(latitude, longitude, radius=5500):
     return """[out:json][timeout:25];
 (
 {ways}
+  way["building"="terminal"]({bbox});
+  relation["building"="terminal"]({bbox});
+  relation["aeroway"="terminal"]({bbox});
+  way["building"="hangar"]({bbox});
+  relation["building"="hangar"]({bbox});
+  relation["aeroway"="hangar"]({bbox});
+  relation["aeroway"="apron"]({bbox});
   node[\"aeroway\"=\"parking_position\"]({bbox});
   node[\"aeroway\"=\"gate\"]({bbox});
   node[\"aeroway\"=\"holding_position\"]({bbox});
 );
-out tags geom;""".format(ways=ways, bbox=bbox)
+out body geom;""".format(ways=ways, bbox=bbox)
 
 
 def coordinate_bounds(latitude, longitude, radius):
@@ -185,15 +196,24 @@ def request_overpass(query, endpoints, timeout=OVERPASS_REQUEST_TIMEOUT):
     body = urllib.parse.urlencode({"data": query}).encode("utf-8")
     errors = []
     attempted = set()
+    busy_deadline = time.monotonic() + OVERPASS_BUSY_WAIT
     while True:
-        now = time.monotonic()
-        with _ENDPOINT_LOCK:
-            candidate = next((value for value in endpoints
-                              if value not in attempted
-                              and value not in _ENDPOINT_IN_FLIGHT
-                              and _ENDPOINT_RETRY_AFTER.get(value, 0) <= now), None)
-            if candidate:
-                _ENDPOINT_IN_FLIGHT.add(candidate)
+        candidate = None
+        with _ENDPOINT_CONDITION:
+            while candidate is None:
+                now = time.monotonic()
+                candidate = next((value for value in endpoints
+                                  if value not in attempted
+                                  and value not in _ENDPOINT_IN_FLIGHT
+                                  and _ENDPOINT_RETRY_AFTER.get(value, 0) <= now), None)
+                if candidate:
+                    _ENDPOINT_IN_FLIGHT.add(candidate)
+                    break
+                busy = any(value not in attempted and value in _ENDPOINT_IN_FLIGHT for value in endpoints)
+                remaining = busy_deadline - now
+                if not busy or remaining <= 0:
+                    break
+                _ENDPOINT_CONDITION.wait(timeout=remaining)
         if not candidate:
             break
         attempted.add(candidate)
@@ -205,19 +225,21 @@ def request_overpass(query, endpoints, timeout=OVERPASS_REQUEST_TIMEOUT):
         try:
             with urllib.request.urlopen(request, timeout=timeout) as response:
                 result = json.loads(response.read().decode("utf-8"))
-            with _ENDPOINT_LOCK:
+            with _ENDPOINT_CONDITION:
                 _ENDPOINT_RETRY_AFTER.pop(candidate, None)
                 _ENDPOINT_IN_FLIGHT.discard(candidate)
+                _ENDPOINT_CONDITION.notify_all()
             return result
         except Exception as error:
             host = urllib.parse.urlparse(candidate).netloc
             errors.append("%s: %s" % (host, short_network_error(error)))
-            with _ENDPOINT_LOCK:
+            with _ENDPOINT_CONDITION:
                 _ENDPOINT_RETRY_AFTER[candidate] = time.monotonic() + OVERPASS_FAILURE_COOLDOWN
                 _ENDPOINT_IN_FLIGHT.discard(candidate)
+                _ENDPOINT_CONDITION.notify_all()
     if errors:
         raise OverpassUnavailableError("all available Overpass services failed (%s)" % "; ".join(errors))
-    raise OverpassUnavailableError("Overpass services are busy or in a short retry cooldown")
+    raise OverpassUnavailableError("Overpass services remained busy for %d seconds or are in a short retry cooldown" % OVERPASS_BUSY_WAIT)
 
 
 def fetch_overpass(latitude, longitude, radius=5500, endpoint=None):
@@ -709,6 +731,69 @@ def point_pair(point):
         return None
 
 
+def geometry_endpoint(point):
+    pair = point_pair(point)
+    return tuple(pair) if pair else None
+
+
+def assemble_relation_rings(members):
+    """Join split outer ways from an OSM multipolygon into closed rings."""
+    segments = []
+    for member in members or []:
+        if member.get("type") != "way" or member.get("role") not in (None, "", "outer"):
+            continue
+        geometry = [point for point in (member.get("geometry") or []) if geometry_endpoint(point)]
+        if len(geometry) >= 2:
+            segments.append(geometry)
+    rings = []
+    while segments:
+        chain = segments.pop(0)
+        joined = True
+        while joined and segments:
+            joined = False
+            first, last = geometry_endpoint(chain[0]), geometry_endpoint(chain[-1])
+            for index, segment in enumerate(segments):
+                segment_first = geometry_endpoint(segment[0])
+                segment_last = geometry_endpoint(segment[-1])
+                if last == segment_first:
+                    chain.extend(segment[1:])
+                elif last == segment_last:
+                    chain.extend(reversed(segment[:-1]))
+                elif first == segment_last:
+                    chain = segment[:-1] + chain
+                elif first == segment_first:
+                    chain = list(reversed(segment[1:])) + chain
+                else:
+                    continue
+                segments.pop(index)
+                joined = True
+                break
+        if len(chain) >= 4 and geometry_endpoint(chain[0]) == geometry_endpoint(chain[-1]):
+            rings.append(chain)
+    return rings
+
+
+def expanded_osm_elements(elements):
+    """Yield normal elements and polygon rings represented by OSM relations."""
+    for element in elements or []:
+        if element.get("type") != "relation":
+            yield element
+            continue
+        geometries = assemble_relation_rings(element.get("members"))
+        if not geometries and element.get("geometry"):
+            geometry = element.get("geometry")
+            if (len(geometry) >= 4
+                    and geometry_endpoint(geometry[0]) == geometry_endpoint(geometry[-1])):
+                geometries = [geometry]
+        for index, geometry in enumerate(geometries, 1):
+            yield {
+                "type": "way",
+                "id": "relation-%s-outer-%d" % (element.get("id"), index),
+                "tags": dict(element.get("tags") or {}),
+                "geometry": geometry,
+            }
+
+
 def feature_kind(tags):
     kind = tags.get("aeroway")
     if kind in MAP_KINDS:
@@ -755,7 +840,7 @@ def normalize(raw, airport, source="OpenStreetMap contributors", source_url="htt
     features = []
     all_points = []
     seen = set()
-    for element in raw.get("elements", []):
+    for element in expanded_osm_elements(raw.get("elements", [])):
         tags = element.get("tags") or {}
         kind = feature_kind(tags)
         if not kind:
@@ -860,13 +945,19 @@ def build_airport_map(ident, cache_dir=None, refresh=False, radius=5500, maximum
     if not refresh and cache_path.is_file():
         cached = json.loads(cache_path.read_text(encoding="utf-8"))
         cache_days = min(maximum_age_days, 1) if cached.get("source") == "OurAirports" else maximum_age_days
+        source = str(cached.get("source") or "")
         try:
             gateway_revision = int(cached.get("sourceRevision") or 0)
         except (TypeError, ValueError):
             gateway_revision = 0
-        gateway_outdated = ("X-Plane Scenery Gateway" in str(cached.get("source") or "")
-                            and gateway_revision < 3)
-        if not gateway_outdated and cache_is_fresh(cache_path, cache_days):
+        try:
+            osm_revision = int(cached.get("osmRevision") or 0)
+        except (TypeError, ValueError):
+            osm_revision = 0
+        gateway_outdated = ("X-Plane Scenery Gateway" in source
+                            and gateway_revision < XPLANE_SOURCE_REVISION)
+        osm_outdated = ("OpenStreetMap" in source and osm_revision < OSM_SOURCE_REVISION)
+        if not gateway_outdated and not osm_outdated and cache_is_fresh(cache_path, cache_days):
             cached["counts"] = feature_counts(cached.get("features", []))
             return cached, True
     if not refresh:
@@ -893,6 +984,7 @@ def build_airport_map(ident, cache_dir=None, refresh=False, radius=5500, maximum
             try:
                 source = "OpenStreetMap contributors + OurAirports" if runway_raw and runway_raw.get("elements") else "OpenStreetMap contributors"
                 result = normalize({"elements": osm_elements}, airport, source=source)
+                result["osmRevision"] = OSM_SOURCE_REVISION
             except AirportMapError:
                 result = None
     result_counts = (result or {}).get("counts") or {}
@@ -924,7 +1016,9 @@ def build_airport_map(ident, cache_dir=None, refresh=False, radius=5500, maximum
             source = " + ".join(sources)
             gateway_result = normalize({"elements": gateway_elements}, airport, source=source,
                                        source_url=XPLANE_GATEWAY_SOURCE_URL)
-            gateway_result["sourceRevision"] = 3
+            gateway_result["sourceRevision"] = XPLANE_SOURCE_REVISION
+            if osm_buildings:
+                gateway_result["osmRevision"] = OSM_SOURCE_REVISION
             if result is None or map_detail_score(gateway_result) > map_detail_score(result):
                 result = gateway_result
         except XPlaneGatewayNoDataError as error:

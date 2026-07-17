@@ -211,7 +211,7 @@ The iPad uses an old SSH server, so modern OpenSSH needs RSA compatibility flags
 
 ```sh
 IP=192.168.2.19
-DEB=outputs/SkyCharts-0.15.1-ios6-armv7.deb
+DEB=outputs/SkyCharts-0.15.2-ios6-armv7.deb
 
 scp -O -o StrictHostKeyChecking=no \
   -o HostKeyAlgorithms=+ssh-rsa \
@@ -297,11 +297,11 @@ Both managers remove reusable cache entries only; exported packs, Pack Agent job
 The pack builder writes a compact normalized JSON map into every airport entry and uses this source order:
 
 1. Reuse a fresh normalized map from `work/airport-map-cache`.
-2. Request detailed aviation geometry from a currently operating [OpenStreetMap Overpass](https://wiki.openstreetmap.org/wiki/Overpass_API) instance.
+2. Request detailed aviation geometry from a currently operating [OpenStreetMap Overpass](https://wiki.openstreetmap.org/wiki/Overpass_API) instance. Country builds briefly queue for an endpoint already serving another SkyCharts worker, so normal concurrency does not cause an unnecessary source switch. OSM terminal buildings are read from both ways and multipolygon relations; split outer rings are reconstructed so airports such as CYYZ retain every terminal footprint.
 3. If OpenStreetMap is unavailable or lacks usable taxiway/stand detail, download the airport's recommended scenery from the official [X-Plane Scenery Gateway](https://gateway.x-plane.com/) and convert its embedded `apt.dat` runways, taxi routes, gates, ramp starts, named aprons, and DSF-text terminal facades. Airport-wide generic pavement polygons are filtered out. When both detailed sources work, SkyCharts keeps the more complete result and retains useful OSM terminal/hangar geometry.
 4. If neither detailed source has a layout, create a runway-only map from [OurAirports](https://ourairports.com/data/).
 
-X-Plane itself does **not** need to be installed. Gateway scenery is requested per ICAO code and the converted result is stored in SkyCharts' normal reusable cache. Failed public services enter a short process-wide cooldown, while an airport confirmed to have no geometry receives a temporary negative-cache marker. This keeps a large country build from repeating the same nine feature requests and timeouts for every airport. The map cache manager ignores these markers and removes the corresponding marker whenever that airport's cached package is deleted.
+X-Plane itself does **not** need to be installed. Gateway scenery is requested per ICAO code and the converted result is stored in SkyCharts' normal reusable cache. Failed public services enter a short process-wide cooldown, while an airport confirmed to have no geometry receives a temporary negative-cache marker. A busy Overpass endpoint is allowed up to 25 seconds to finish its current airport before fallback selection. This keeps a large country build from changing sources only because all endpoints were momentarily occupied, while still avoiding repeated feature requests and long timeouts during a real outage. OSM caches created before multipolygon terminal support are refreshed automatically; manual cache deletion is not required. The map cache manager ignores negative-cache markers and removes the corresponding marker whenever that airport's cached package is deleted.
 
 No additional Python package is required; ZIP and `apt.dat` conversion use the Python standard library. The iPad footer reports the source embedded in each map. Only identifiers present in source data are labelled; unnumbered parking-position geometry remains visible without an invented stand number. OpenStreetMap data is available under the [Open Database License](https://www.openstreetmap.org/copyright). X-Plane Gateway data is used as a personal offline fallback and should be reviewed against the Gateway terms before distributing generated map assets.
 
