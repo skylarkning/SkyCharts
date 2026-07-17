@@ -98,6 +98,36 @@ class ChartAssetCacheManagerTests(unittest.TestCase):
             self.assertEqual(metadata["airports"][0]["ident"], "CYYZ")
             self.assertEqual(metadata["airports"][0]["category"], "APPROACH")
 
+    def test_combined_package_cache_groups_and_deletes_chart_and_map_data(self):
+        with tempfile.TemporaryDirectory() as directory:
+            base = pathlib.Path(directory)
+            chart_cache = base / "charts"
+            map_cache = base / "maps"
+            self.write_chart(chart_cache, "chart-alpha")
+            metadata_path = chart_cache / "chart-alpha" / "metadata.json"
+            metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+            metadata["airports"] = [{"ident": "KAAA", "name": "Alpha Airport"}]
+            metadata_path.write_text(json.dumps(metadata), encoding="utf-8")
+            map_cache.mkdir()
+            (map_cache / "KAAA.json").write_text(json.dumps({
+                "ident": "KAAA", "name": "Alpha Airport", "generatedAt": "2026-07-16T12:00:00Z",
+                "counts": {"parking_position": 2}, "features": [{"kind": "runway"}],
+            }), encoding="utf-8")
+
+            chart_entries = skycharts_cli.chart_cache_entries(chart_cache, manifest_roots=())
+            map_entries = skycharts_cli.airport_map_cache_entries(map_cache)
+            packages = skycharts_cli.airport_package_cache_entries(chart_entries, map_entries)
+            self.assertEqual(set(packages), {"KAAA"})
+            self.assertEqual(packages["KAAA"]["charts"], 1)
+            self.assertTrue(packages["KAAA"]["has_map"])
+
+            result = skycharts_cli.delete_airport_package_cache(
+                ["KAAA"], chart_cache, map_cache, manifest_roots=())
+            self.assertEqual(result["charts"], ["chart-alpha"])
+            self.assertEqual(result["maps"], ["KAAA"])
+            self.assertFalse((chart_cache / "chart-alpha").exists())
+            self.assertFalse((map_cache / "KAAA.json").exists())
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -19,6 +19,9 @@ class AirportMapTests(unittest.TestCase):
                 {"type": "way", "id": 4, "tags": {"aeroway": "apron"},
                  "geometry": [{"lat": 40.002, "lon": -73.06}, {"lat": 40.004, "lon": -73.06},
                               {"lat": 40.004, "lon": -73.02}, {"lat": 40.002, "lon": -73.06}]},
+                {"type": "way", "id": 5, "tags": {"building": "terminal", "name": "New Terminal 1"},
+                 "geometry": [{"lat": 40.002, "lon": -73.05}, {"lat": 40.003, "lon": -73.05},
+                              {"lat": 40.003, "lon": -73.04}, {"lat": 40.002, "lon": -73.05}]},
             ]
         }
         result = airport_map.normalize(raw, {"ident": "TEST", "name": "Test Airport", "latitude": 40.0, "longitude": -73.0})
@@ -26,6 +29,7 @@ class AirportMapTests(unittest.TestCase):
         self.assertEqual(result["counts"]["taxiway"], 1)
         self.assertEqual(result["counts"]["parking_position"], 1)
         self.assertTrue(next(feature for feature in result["features"] if feature["kind"] == "apron")["closed"])
+        self.assertEqual(next(feature for feature in result["features"] if feature["kind"] == "terminal")["label"], "T1")
         self.assertLess(result["bounds"]["minLon"], -73.1)
         self.assertGreater(result["bounds"]["maxLat"], 40.01)
 
@@ -37,6 +41,12 @@ class AirportMapTests(unittest.TestCase):
         query = airport_map.overpass_query(40.0, -73.0)
         for value in ("runway", "taxiway", "apron", "parking_position"):
             self.assertIn(value, query)
+
+    def test_terminal_labels_require_an_available_designator(self):
+        self.assertEqual(airport_map.terminal_label({"ref": "T2", "name": "Domestic Terminal"}), "T2")
+        self.assertEqual(airport_map.terminal_label({"name": "Terminal 4"}), "T4")
+        self.assertEqual(airport_map.terminal_label({"name": "白云国际机场T1航站楼"}), "T1")
+        self.assertIsNone(airport_map.terminal_label({"name": "International Terminal"}))
 
     def test_parses_osm_xml_for_standard_api_fallback(self):
         payload = b"""<osm>

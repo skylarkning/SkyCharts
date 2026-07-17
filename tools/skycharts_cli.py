@@ -348,6 +348,139 @@ def manage_airport_map_cache():
         print("Deleted %d cached airport map(s): %s\n" % (len(removed), ", ".join(removed)))
 
 
+def airport_package_cache_entries(chart_entries=None, map_entries=None):
+    chart_entries = list(chart_entries if chart_entries is not None else chart_cache_entries())
+    map_entries = list(map_entries if map_entries is not None else airport_map_cache_entries())
+    packages = {}
+    for ident, chart in chart_cache_airports(chart_entries).items():
+        packages[ident] = {
+            "ident": ident,
+            "name": chart["name"],
+            "guids": set(chart["guids"]),
+            "charts": len(chart["guids"]),
+            "pages": chart["pages"],
+            "chart_size": chart["size"],
+            "map_size": 0,
+            "map_features": 0,
+            "stands": 0,
+            "map_generated": "",
+            "has_map": False,
+        }
+    for airport_map in map_entries:
+        ident = airport_map["ident"]
+        package = packages.setdefault(ident, {
+            "ident": ident,
+            "name": airport_map["name"],
+            "guids": set(),
+            "charts": 0,
+            "pages": 0,
+            "chart_size": 0,
+            "map_size": 0,
+            "map_features": 0,
+            "stands": 0,
+            "map_generated": "",
+            "has_map": False,
+        })
+        if not package["name"] or package["name"] == ident:
+            package["name"] = airport_map["name"]
+        package.update({
+            "map_size": airport_map["size"],
+            "map_features": airport_map["features"],
+            "stands": airport_map["stands"],
+            "map_generated": airport_map["generated"],
+            "has_map": True,
+        })
+    for package in packages.values():
+        package["size"] = package["chart_size"] + package["map_size"]
+    return packages
+
+
+def delete_airport_package_cache(idents, chart_cache_dir=None, map_cache_dir=None, manifest_roots=None):
+    selected = sorted({str(ident).upper() for ident in idents})
+    charts, chart_size = delete_chart_cache_airports(selected, chart_cache_dir, manifest_roots)
+    maps = delete_airport_map_cache(selected, map_cache_dir)
+    return {"airports": selected, "charts": charts, "maps": maps, "chart_size": chart_size}
+
+
+def print_airport_packages(packages, query=""):
+    query = query.strip().upper()
+    matches = [value for value in packages.values() if not query or query in value["ident"] or query in value["name"].upper()]
+    matches.sort(key=lambda item: item["ident"])
+    if not matches:
+        print("No cached airport packages matched %s." % query)
+        return
+    for package in matches[:50]:
+        map_text = "%d map features" % package["map_features"] if package["has_map"] else "map unavailable"
+        print("%s — %s" % (package["ident"], package["name"]))
+        print("   %d charts • %d pages • %s • %s" % (
+            package["charts"], package["pages"], map_text, format_bytes(package["size"])))
+    if len(matches) > 50:
+        print("…and %d more; enter a narrower search." % (len(matches) - 50))
+
+
+def manage_airport_package_cache():
+    while True:
+        chart_entries = chart_cache_entries()
+        map_entries = airport_map_cache_entries()
+        packages = airport_package_cache_entries(chart_entries, map_entries)
+        unknown = [entry for entry in chart_entries if not entry["airports"]]
+        physical_size = sum(entry["size"] for entry in chart_entries) + sum(entry["size"] for entry in map_entries)
+        print("\nCached Airport Package Manager")
+        print("==============================")
+        print("%d airports • %d charts • %d maps • %s" % (
+            len(packages), len(chart_entries), len(map_entries), format_bytes(physical_size)))
+        if unknown:
+            print("%d legacy charts are not linked to a known airport." % len(unknown))
+        if not packages and not unknown:
+            print("Airport package cache is empty.\n")
+            return
+        print("""
+1. Find/list cached airport packages
+2. Delete package cache by airport ICAO
+3. Delete unidentified legacy chart cache
+4. Delete all cached airport packages
+0. Back
+""")
+        choice = input("Choose an option: ").strip()
+        if choice == "0":
+            return
+        if choice == "1":
+            print_airport_packages(packages, ask("ICAO or airport-name filter (blank lists first 50)", "") or "")
+        elif choice == "2":
+            codes = [value.upper() for value in ask("Airport ICAO codes separated by spaces", "").replace(",", " ").split()]
+            selected = [packages[code] for code in codes if code in packages]
+            if not selected:
+                print("No matching cached airport packages were selected.")
+                continue
+            for package in selected:
+                print("%s — %d charts • %s • %s" % (
+                    package["ident"], package["charts"], "map cached" if package["has_map"] else "no map", format_bytes(package["size"])))
+            print("This removes reusable chart and map cache entries together; exported packs, Pack Agent jobs, and iPad content remain unchanged.")
+            if not ask("Delete cached package data for %s? (y/N)" % ", ".join(item["ident"] for item in selected), "N").lower().startswith("y"):
+                continue
+            result = delete_airport_package_cache(item["ident"] for item in selected)
+            print("Deleted %d chart entries and %d airport maps (%s chart logical size)." % (
+                len(result["charts"]), len(result["maps"]), format_bytes(result["chart_size"])))
+        elif choice == "3":
+            if not unknown:
+                print("There are no unidentified chart cache entries.")
+                continue
+            if not ask("Delete %d unidentified chart entries (%s)? (y/N)" % (len(unknown), format_bytes(sum(item["size"] for item in unknown))), "N").lower().startswith("y"):
+                continue
+            removed, size = delete_chart_cache_guids(item["guid"] for item in unknown)
+            print("Deleted %d unidentified entries (%s logical size)." % (len(removed), format_bytes(size)))
+        elif choice == "4":
+            print("This clears the reusable chart and airport-map caches. Exported packs, Pack Agent jobs, and iPad content are preserved.")
+            if ask("Delete all cached airport packages? Type DELETE to confirm", "N") != "DELETE":
+                continue
+            removed_charts, size = delete_chart_cache_guids(item["guid"] for item in chart_entries)
+            removed_maps = delete_airport_map_cache(item["ident"] for item in map_entries)
+            print("Deleted %d chart entries and %d airport maps (%s chart logical size)." % (
+                len(removed_charts), len(removed_maps), format_bytes(size)))
+        else:
+            print("Unknown option.")
+
+
 def cache_status():
     index = ROOT / "work" / "chart-cache" / "index.json"
     charts = []
@@ -360,6 +493,8 @@ def cache_status():
         subprocess.call(["du", "-sh", str(index.parent)])
     maps = airport_map_cache_entries()
     print("Cached airport maps: %d (%s)" % (len(maps), format_bytes(sum(item["size"] for item in maps))))
+    packages = airport_package_cache_entries(chart_cache_entries(), maps)
+    print("Combined airport packages: %d" % len(packages))
     print()
 
 
@@ -383,8 +518,7 @@ SkyCharts Mac Client
 4. Download selected airports
 5. Install an existing pack over SSH
 6. Show reusable cache status
-7. Manage cached airport maps
-8. Manage cached chart assets
+7. Manage cached airport packages
 0. Quit
 """)
         choice = input("Choose an option: ").strip()
@@ -423,9 +557,7 @@ SkyCharts Mac Client
         elif choice == "6":
             cache_status()
         elif choice == "7":
-            manage_airport_map_cache()
-        elif choice == "8":
-            manage_chart_cache()
+            manage_airport_package_cache()
         else:
             print("Unknown option.")
 

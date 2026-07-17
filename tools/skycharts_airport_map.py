@@ -7,6 +7,7 @@ import datetime as dt
 import json
 import math
 import pathlib
+import re
 import tempfile
 import urllib.error
 import urllib.parse
@@ -241,6 +242,18 @@ def feature_counts(features):
     return counts
 
 
+def terminal_label(tags):
+    reference = str(tags.get("ref") or "").strip().upper()
+    if reference:
+        return "T" + reference if len(reference) == 1 and reference.isalnum() else reference
+    name = str(tags.get("name") or "").strip()
+    match = re.search(r"(?:terminal|terminl)\s*[-#]?\s*(?:no\.?\s*)?([a-z]|[0-9]{1,3})\b|T\s*([0-9]{1,3}|[A-Z]\b)", name, re.IGNORECASE)
+    if not match:
+        return None
+    value = (match.group(1) or match.group(2) or "").upper()
+    return value if value.startswith("T") else "T" + value
+
+
 def normalize(raw, airport):
     features = []
     all_points = []
@@ -269,6 +282,10 @@ def normalize(raw, airport):
             value = tags.get(key)
             if value:
                 feature[key] = str(value)
+        if kind == "terminal":
+            label = terminal_label(tags)
+            if label:
+                feature["label"] = label
         if len(geometry) > 2 and geometry[0] == geometry[-1]:
             feature["closed"] = True
         features.append(feature)

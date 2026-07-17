@@ -15,8 +15,8 @@ SkyCharts provides:
 - Five compact chart categories: **STAR**, **SID**, **APP**, **TAXI**, and **MISC**.
 - Runway-grouped procedure lists and a collapsible chart sidebar.
 - Pinch-to-zoom, panning, automatic centering, and orientation-aware chart fitting.
-- Interactive offline airport maps with physically proportioned runways and aviation markings, repeated collision-aware taxiway identifiers, aprons, terminals, gates, and parking stands.
-- A viewport-sized, zoom-aware label layer that repeats long taxiway references and reveals named gates and stands without rerendering the full airport bitmap during a gesture.
+- Interactive offline airport maps with physically proportioned runways and aviation markings, repeated collision-aware taxiway identifiers, labelled terminals, aprons, gates, and parking stands.
+- A viewport-sized, zoom-aware label layer that tracks the map continuously during pan and pinch gestures, keeps terminal identifiers visible, and smoothly reveals named gates and stands without rerendering the full airport bitmap.
 - Touch inspection of airport-map features with ICAO references and available surface details.
 - Current METAR weather in raw and decoded views.
 - In-app combined chart-and-map downloads through a Mac on the same network.
@@ -76,7 +76,7 @@ Use two fingers to zoom and one finger to pan. Charts automatically refit and re
 
 Select an installed airport and tap **MAP** beside the gear button. The compact offline vector map was installed with that airport's charts and does not require the Mac Pack Agent to remain running.
 
-Drag to pan, pinch to zoom, or tap **Fit** to show the entire airport. Runway geometry is merged into complete full-length surfaces and uses the source runway width to draw proportional pavement, edge lines, thresholds, centerlines, touchdown markings, aiming points, and designators. Named taxiway identifiers are sampled along the complete polyline and repeated at a consistent screen-space interval, including routes split into multiple source segments. Gate and stand identifiers are drawn in a separate viewport-sized layer after a pan or zoom ends: overview labels remain readable, deeper zooms reveal the complete visible set of named positions, and pinch gestures avoid a full-map label redraw. Tap a runway, taxiway, parking stand, gate, apron, or terminal to inspect its available reference, name, and surface details.
+Drag to pan, pinch to zoom, or tap **Fit** to show the entire airport. Runway geometry is merged into complete full-length surfaces and uses the source runway width to draw proportional pavement, edge lines, thresholds, centerlines, touchdown markings, aiming points, and designators. Named taxiway identifiers are sampled along the complete polyline and repeated at a consistent screen-space interval, including routes split into multiple source segments. The viewport label layer follows the geometry continuously while panning and pinching; named stand and gate labels fade in as detail increases, while available terminal numbers remain visible at every zoom level. Yellow centerlines use a single vector layer whose width adjusts continuously during a pinch, and the pavement rerenders once after the gesture to retain a fine, readable visual weight. Tap a runway, taxiway, parking stand, gate, apron, or terminal to inspect its available reference, name, and surface details.
 
 The first stage is a north-up airport diagram; it does not yet display ownship position, routing, traffic, or NOTAMs. Map detail depends on OpenStreetMap coverage for the selected airport.
 
@@ -211,7 +211,7 @@ The iPad uses an old SSH server, so modern OpenSSH needs RSA compatibility flags
 
 ```sh
 IP=192.168.2.19
-DEB=outputs/SkyCharts-0.14.0-ios6-armv7.deb
+DEB=outputs/SkyCharts-0.14.1-ios6-armv7.deb
 
 scp -O -o StrictHostKeyChecking=no \
   -o HostKeyAlgorithms=+ssh-rsa \
@@ -290,8 +290,7 @@ The installer stages into a temporary directory, validates `pack.json`, and atom
 
 The menu handles browser authentication, starts the Pack Agent, builds combined chart-and-map country or selected-airport packs, installs packs over SSH, and reports both cache types.
 
-- Choose **Manage cached airport maps** to see each cached airport's name, size, feature count, stand count, and download date, then delete selected entries or clear the entire airport-map cache.
-- Choose **Manage cached chart assets** to search the chart cache by airport ICAO or name, inspect chart/page counts and logical size, delete selected airports, remove unidentified legacy entries, or clear the complete reusable chart cache. Shared chart GUIDs are retained while an unselected airport still references them.
+- Choose **Manage cached airport packages** to search by airport ICAO or name, inspect combined chart/page/map counts and storage, delete both reusable chart and map data for selected airports, remove unidentified legacy entries, or clear the complete reusable cache. Shared chart GUIDs are retained while an unselected airport still references them.
 
 Both managers remove reusable cache entries only; exported packs, Pack Agent jobs, and content already installed on the iPad remain intact. Because chart pages may be hard-linked into an existing pack or Pack Agent job, the logical cache size removed can be larger than the immediately reclaimed disk space. If no cookie file exists, authenticated operations automatically offer browser login.
 
