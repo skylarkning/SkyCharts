@@ -342,7 +342,8 @@ def bundle_airport_maps(airports, destination, workers=4, cache_dir=None):
                 (destination / relative).write_text(json.dumps(result, separators=(",", ":")), encoding="utf-8")
                 airport["map"] = relative.as_posix()
                 completed += 1
-                print("  %s airport map %s" % (ident, "reused" if cached else "downloaded"), flush=True)
+                print("  %s airport map %s via %s" % (
+                    ident, "reused" if cached else "downloaded", result.get("source") or "unknown source"), flush=True)
             except Exception as error:
                 print("  %s airport map unavailable: %s" % (ident, error), flush=True)
             finished += 1

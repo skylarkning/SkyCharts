@@ -40,6 +40,15 @@ class AirportMapCacheManagerTests(unittest.TestCase):
             self.assertEqual(entries[0]["ident"], "TEST")
             self.assertEqual(skycharts_cli.delete_airport_map_cache(["TEST"], path.parent), ["TEST"])
 
+    def test_negative_cache_markers_are_hidden_and_deleted_with_airport(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = pathlib.Path(directory)
+            marker = root / "ZSCN.unavailable.json"
+            marker.write_text(json.dumps({"reason": "temporary", "retryAfter": 9999999999}), encoding="utf-8")
+            self.assertEqual(skycharts_cli.airport_map_cache_entries(root), [])
+            self.assertEqual(skycharts_cli.delete_airport_map_cache(["ZSCN"], root), [])
+            self.assertFalse(marker.exists())
+
 
 class ChartAssetCacheManagerTests(unittest.TestCase):
     def write_chart(self, root, guid):

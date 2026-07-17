@@ -23,7 +23,7 @@ SkyCharts provides:
 - A geographic content manager with per-level storage usage and swipe-to-delete.
 - A reusable Mac cache and single-stream TAR transfers for large offline libraries.
 
-The app does not contain an Xbox login, planner cookie, relay, or web browser. A Mac downloads authorized chart assets from the planner and matching airport geometry from OpenStreetMap, then bundles both into one local pack and transfers it to the iPad. SkyCharts reads the complete package from `/var/mobile/Library/SkyCharts/ChartPacks`; legacy maps in `/var/mobile/Library/SkyCharts/AirportMaps` remain supported. Version 0.8 automatically migrates packs and preferences from an existing AtlasSix installation.
+The app does not contain an Xbox login, planner cookie, relay, or web browser. A Mac downloads authorized chart assets from the planner and matching airport geometry from OpenStreetMap, the X-Plane Scenery Gateway, or a runway-only OurAirports fallback, then bundles both into one local pack and transfers it to the iPad. SkyCharts reads the complete package from `/var/mobile/Library/SkyCharts/ChartPacks`; legacy maps in `/var/mobile/Library/SkyCharts/AirportMaps` remain supported. Version 0.8 automatically migrates packs and preferences from an existing AtlasSix installation.
 
 The earlier `relay/` service remains as an optional compatibility prototype; it is not required for the offline workflow.
 
@@ -78,7 +78,7 @@ Select an installed airport and tap **MAP** beside the gear button. The compact 
 
 Drag to pan, pinch to zoom, or tap **Fit** to show the entire airport. Runway geometry is merged into complete full-length surfaces and uses the source runway width to draw proportional pavement, edge lines, thresholds, centerlines, touchdown markings, and aiming points. Runway designator badges remain a fixed readable size instead of enlarging with the underlying map. Named taxiway identifiers are sampled along the complete polyline and repeated at a consistent screen-space interval, including routes split into multiple source segments. The display-linked label layer follows the geometry during the gesture itself; progressively more taxiway, stand, and gate labels fade in as detail increases, while available `Terminal X` names remain visible at every zoom level. Grey taxiway pavement retains its natural map scale, while the independent yellow vector centerline adjusts continuously to maintain a fine screen-relative weight. Off-screen label geometry is culled and projected coordinates are cached to keep legacy iPads responsive. Tap a runway, taxiway, parking stand, gate, apron, or terminal to inspect its available reference, name, and surface details.
 
-The first stage is a north-up airport diagram; it does not yet display ownship position, routing, traffic, or NOTAMs. Map detail depends on OpenStreetMap coverage for the selected airport.
+The first stage is a north-up airport diagram; it does not yet display ownship position, routing, traffic, or NOTAMs. Map detail depends on the best airport geometry available from OpenStreetMap or the X-Plane Scenery Gateway. The final OurAirports fallback supplies a correctly positioned runway diagram when neither detailed source has an airport layout.
 
 ### 6. Check METAR weather
 
@@ -211,7 +211,7 @@ The iPad uses an old SSH server, so modern OpenSSH needs RSA compatibility flags
 
 ```sh
 IP=192.168.2.19
-DEB=outputs/SkyCharts-0.14.3-ios6-armv7.deb
+DEB=outputs/SkyCharts-0.15.0-ios6-armv7.deb
 
 scp -O -o StrictHostKeyChecking=no \
   -o HostKeyAlgorithms=+ssh-rsa \
@@ -294,7 +294,16 @@ The menu handles browser authentication, starts the Pack Agent, builds combined 
 
 Both managers remove reusable cache entries only; exported packs, Pack Agent jobs, and content already installed on the iPad remain intact. Because chart pages may be hard-linked into an existing pack or Pack Agent job, the logical cache size removed can be larger than the immediately reclaimed disk space. If no cookie file exists, authenticated operations automatically offer browser login.
 
-The pack builder uses OpenStreetMap aviation features and writes a compact normalized JSON map into every airport entry. No additional Python package is required. SkyCharts displays the required OpenStreetMap attribution in the map footer. Only identifiers present in the source data are labelled; unnumbered parking-position geometry remains visible without an invented stand number. OpenStreetMap data is available under the [Open Database License](https://www.openstreetmap.org/copyright).
+The pack builder writes a compact normalized JSON map into every airport entry and uses this source order:
+
+1. Reuse a fresh normalized map from `work/airport-map-cache`.
+2. Request detailed aviation geometry from a currently operating [OpenStreetMap Overpass](https://wiki.openstreetmap.org/wiki/Overpass_API) instance.
+3. If OpenStreetMap is unavailable or lacks usable taxiway/stand detail, download the airport's recommended scenery from the official [X-Plane Scenery Gateway](https://gateway.x-plane.com/) and convert its embedded `apt.dat` runways, pavement polygons, taxi routes, gates, and ramp starts. When both detailed sources work, SkyCharts keeps the more complete result.
+4. If neither detailed source has a layout, create a runway-only map from [OurAirports](https://ourairports.com/data/).
+
+X-Plane itself does **not** need to be installed. Gateway scenery is requested per ICAO code and the converted result is stored in SkyCharts' normal reusable cache. Failed public services enter a short process-wide cooldown, while an airport confirmed to have no geometry receives a temporary negative-cache marker. This keeps a large country build from repeating the same nine feature requests and timeouts for every airport. The map cache manager ignores these markers and removes the corresponding marker whenever that airport's cached package is deleted.
+
+No additional Python package is required; ZIP and `apt.dat` conversion use the Python standard library. The iPad footer reports the source embedded in each map. Only identifiers present in source data are labelled; unnumbered parking-position geometry remains visible without an invented stand number. OpenStreetMap data is available under the [Open Database License](https://www.openstreetmap.org/copyright). X-Plane Gateway data is used as a personal offline fallback and should be reviewed against the Gateway terms before distributing generated map assets.
 
 ## In-app downloads through Pack Agent
 
@@ -361,6 +370,7 @@ See [relay/README.md](relay/README.md) for endpoints. Never commit cookies, sign
 - **Browser login dependency missing:** run `python3 -m venv .venv`, `.venv/bin/python3 -m pip install playwright`, and `.venv/bin/python3 -m playwright install chromium`. The launcher automatically uses this isolated environment.
 - **Weather unavailable:** confirm the iPad has Internet access. Some airports do not publish METAR reports, and the NWS station may temporarily be unavailable.
 - **Pack build failed:** inspect terminal output and `work/pack-agent/*.log`; check cookie, Internet access, and planner availability.
+- **`Errno 61` while building maps:** this means the remote TCP connection was refused, not that SkyCharts received a normal HTTP rate-limit response. Restart the Pack Agent after updating so it loads the current Overpass list, circuit breaker, and X-Plane fallback. HTTP rate limiting is normally reported explicitly as `429 Too Many Requests`.
 - **Pack transfer failed:** verify the iPad and Mac are on the same LAN, port 8770 is reachable, and iPad storage is available. Cached assets make retries faster.
 - **`uicache` cache-file error:** run it as `mobile` and respring SpringBoard using the commands above.
 - **Missing chart:** use the gear menu's content manager to confirm the pack and airport are installed; rebuild if `pack.json` references missing PNGs.

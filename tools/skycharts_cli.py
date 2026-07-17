@@ -63,6 +63,8 @@ def airport_map_cache_entries(cache_dir=None):
     cache_dir = pathlib.Path(cache_dir or ROOT / "work" / "airport-map-cache")
     entries = []
     for path in sorted(cache_dir.glob("*.json")) if cache_dir.exists() else []:
+        if path.name.endswith(".unavailable.json"):
+            continue
         try:
             data = json.loads(path.read_text(encoding="utf-8"))
         except (OSError, ValueError):
@@ -73,7 +75,8 @@ def airport_map_cache_entries(cache_dir=None):
             "name": str(data.get("name") or "Unreadable cache entry"),
             "generated": str(data.get("generatedAt") or "")[:10] or "unknown date",
             "features": len(data.get("features", [])) if isinstance(data.get("features"), list) else 0,
-            "stands": counts.get("parking_position", 0),
+            "stands": counts.get("parking_position", 0) + counts.get("gate", 0),
+            "source": str(data.get("source") or "unknown source"),
             "size": path.stat().st_size,
             "path": path,
         })
@@ -82,12 +85,17 @@ def airport_map_cache_entries(cache_dir=None):
 
 def delete_airport_map_cache(idents, cache_dir=None):
     requested = {str(ident).upper() for ident in idents}
+    cache_dir = pathlib.Path(cache_dir or ROOT / "work" / "airport-map-cache")
     removed = []
     for entry in airport_map_cache_entries(cache_dir):
         if entry["ident"] not in requested:
             continue
         entry["path"].unlink()
         removed.append(entry["ident"])
+    for ident in requested:
+        marker = cache_dir / (ident + ".unavailable.json")
+        if marker.exists():
+            marker.unlink()
     return removed
 
 
@@ -318,8 +326,8 @@ def manage_airport_map_cache():
         total = sum(item["size"] for item in entries)
         for index, entry in enumerate(entries, 1):
             print("%d. %s — %s" % (index, entry["ident"], entry["name"]))
-            print("   %s • %d features • %d stands • %s" % (
-                format_bytes(entry["size"]), entry["features"], entry["stands"], entry["generated"]))
+            print("   %s • %d features • %d stands • %s • %s" % (
+                format_bytes(entry["size"]), entry["features"], entry["stands"], entry["source"], entry["generated"]))
         print("\nTotal: %d maps • %s" % (len(entries), format_bytes(total)))
         print("A. Delete all cached airport maps")
         print("0. Back")
