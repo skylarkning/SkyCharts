@@ -16,7 +16,7 @@ SkyCharts provides:
 - Runway-grouped procedure lists and a collapsible chart sidebar.
 - Pinch-to-zoom, panning, automatic centering, and orientation-aware chart fitting.
 - Interactive offline airport maps with physically proportioned runways and aviation markings, repeated collision-aware taxiway identifiers, labelled terminals, aprons, gates, and parking stands.
-- A viewport-sized, zoom-aware label layer that tracks the map continuously during pan and pinch gestures, keeps terminal identifiers visible, and smoothly reveals named gates and stands without rerendering the full airport bitmap.
+- A viewport-sized, display-linked label layer that tracks the map continuously during pan and pinch gestures, keeps `Terminal X` identifiers visible, and uses progressive LOD fades and density limits for taxiway, gate, and stand labels.
 - Touch inspection of airport-map features with ICAO references and available surface details.
 - Current METAR weather in raw and decoded views.
 - In-app combined chart-and-map downloads through a Mac on the same network.
@@ -76,7 +76,7 @@ Use two fingers to zoom and one finger to pan. Charts automatically refit and re
 
 Select an installed airport and tap **MAP** beside the gear button. The compact offline vector map was installed with that airport's charts and does not require the Mac Pack Agent to remain running.
 
-Drag to pan, pinch to zoom, or tap **Fit** to show the entire airport. Runway geometry is merged into complete full-length surfaces and uses the source runway width to draw proportional pavement, edge lines, thresholds, centerlines, touchdown markings, aiming points, and designators. Named taxiway identifiers are sampled along the complete polyline and repeated at a consistent screen-space interval, including routes split into multiple source segments. The viewport label layer follows the geometry continuously while panning and pinching; named stand and gate labels fade in as detail increases, while available terminal numbers remain visible at every zoom level. Yellow centerlines use a single vector layer whose width adjusts continuously during a pinch, and the pavement rerenders once after the gesture to retain a fine, readable visual weight. Tap a runway, taxiway, parking stand, gate, apron, or terminal to inspect its available reference, name, and surface details.
+Drag to pan, pinch to zoom, or tap **Fit** to show the entire airport. Runway geometry is merged into complete full-length surfaces and uses the source runway width to draw proportional pavement, edge lines, thresholds, centerlines, touchdown markings, aiming points, and designators. Named taxiway identifiers are sampled along the complete polyline and repeated at a consistent screen-space interval, including routes split into multiple source segments. The display-linked label layer follows the geometry during the gesture itself; progressively more taxiway, stand, and gate labels fade in as detail increases, while available `Terminal X` names remain visible at every zoom level. Grey taxiway pavement retains its natural map scale, while the independent yellow vector centerline adjusts continuously to maintain a fine screen-relative weight. Tap a runway, taxiway, parking stand, gate, apron, or terminal to inspect its available reference, name, and surface details.
 
 The first stage is a north-up airport diagram; it does not yet display ownship position, routing, traffic, or NOTAMs. Map detail depends on OpenStreetMap coverage for the selected airport.
 
@@ -211,7 +211,7 @@ The iPad uses an old SSH server, so modern OpenSSH needs RSA compatibility flags
 
 ```sh
 IP=192.168.2.19
-DEB=outputs/SkyCharts-0.14.1-ios6-armv7.deb
+DEB=outputs/SkyCharts-0.14.2-ios6-armv7.deb
 
 scp -O -o StrictHostKeyChecking=no \
   -o HostKeyAlgorithms=+ssh-rsa \

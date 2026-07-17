@@ -245,13 +245,15 @@ def feature_counts(features):
 def terminal_label(tags):
     reference = str(tags.get("ref") or "").strip().upper()
     if reference:
-        return "T" + reference if len(reference) == 1 and reference.isalnum() else reference
+        value = reference[1:] if reference.startswith("T") and len(reference) > 1 else reference
+        return "Terminal " + value
     name = str(tags.get("name") or "").strip()
     match = re.search(r"(?:terminal|terminl)\s*[-#]?\s*(?:no\.?\s*)?([a-z]|[0-9]{1,3})\b|T\s*([0-9]{1,3}|[A-Z]\b)", name, re.IGNORECASE)
     if not match:
         return None
     value = (match.group(1) or match.group(2) or "").upper()
-    return value if value.startswith("T") else "T" + value
+    value = value[1:] if value.startswith("T") and len(value) > 1 else value
+    return "Terminal " + value
 
 
 def normalize(raw, airport):
