@@ -25,6 +25,15 @@ class ReleaseMetadataTests(unittest.TestCase):
         self.assertIn('@"SkyChartsPublicVersion"', source)
         self.assertIn('%@ (Build %@)', source)
 
+    def test_ipa_keeps_jailbreak_shared_storage_access(self):
+        with (ROOT / "SkyCharts.entitlements").open("rb") as handle:
+            entitlements = plistlib.load(handle)
+
+        self.assertIs(entitlements.get("platform-application"), True)
+        self.assertIs(
+            entitlements.get("com.apple.private.security.container-required"), False
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

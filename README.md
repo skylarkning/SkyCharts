@@ -213,7 +213,7 @@ SkyCharts deliberately keeps its public and internal versions separate:
 - `CFBundleShortVersionString` is the internal iteration version. It may advance during development without changing the public release label.
 - `CFBundleVersion` is the monotonically increasing internal build number.
 
-The current identities are public `V1.0 Beta`, internal `0.15.4`, and build `39`. The About page therefore displays `V1.0 Beta (Build 39)`.
+The current identities are public `V1.0 Beta`, internal `0.15.5`, and build `40`. The About page therefore displays `V1.0 Beta (Build 40)`.
 
 Create a jailbreak/AppSync-compatible IPA only for an explicitly requested public release:
 
@@ -228,7 +228,7 @@ The command builds a final armv7 package, stages `SkyCharts.app`, and writes:
 outputs/SkyCharts-V1.0-Beta-ios6-armv7.ipa
 ```
 
-The IPA uses the standard `Payload/SkyCharts.app` layout and the app's Theos signature. It is intended for a jailbroken iOS 6 device with AppSync or another compatible IPA installer; it is not an App Store-signed archive. The Debian/SSH workflow below remains the fastest development install path.
+The IPA uses the standard `Payload/SkyCharts.app` layout and the app's Theos signature. Its platform-app entitlements disable the normal application-container requirement so an AppSync installation retains access to `/var/mobile/Library/SkyCharts`, existing offline packs, preferences, and local Pack Agent transfers. It is intended for a jailbroken iOS 6 device with AppSync or another compatible IPA installer; it is not an App Store-signed archive. The Debian/SSH workflow below remains the fastest development install path.
 
 ## Install, restart, and refresh SpringBoard
 
@@ -236,7 +236,7 @@ The iPad uses an old SSH server, so modern OpenSSH needs RSA compatibility flags
 
 ```sh
 IP=192.168.2.19
-DEB=outputs/SkyCharts-0.15.4-ios6-armv7.deb
+DEB=outputs/SkyCharts-0.15.5-ios6-armv7.deb
 
 scp -O -o StrictHostKeyChecking=no \
   -o HostKeyAlgorithms=+ssh-rsa \
