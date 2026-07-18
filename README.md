@@ -89,10 +89,10 @@ Tap **Wx** at the bottom-left. The weather window provides **Raw** and **Decoded
 Open the gear menu and choose **Manage Downloaded Content**. Expand the hierarchy:
 
 ```text
-Continent → Country → State/Province/Region → City → Airport
+Continent → Country/Region → State/Province/Region → City → Airport
 ```
 
-Each level shows its unique chart and airport-map storage. The summary at the top shows total SkyCharts storage and free space remaining on the iPad. Swipe an airport, city, subdivision, country, or continent to delete all offline content beneath that level. Multi-airport packs are rewritten safely so unrelated airports remain installed.
+Each level shows its unique chart and airport-map storage. The summary at the top shows total SkyCharts storage and free space remaining on the iPad. Swipe an airport, city, subdivision, country/region, or continent to delete all offline content beneath that level. Multi-airport packs are rewritten safely so unrelated airports remain installed.
 
 ### 8. View application information
 
@@ -204,6 +204,31 @@ cp packages/com.skyning.skycharts_*_iphoneos-arm.deb \
 ```
 
 The Makefile targets `iphone:clang:10.3:6.0` and `armv7`.
+
+### Version identities and public IPA releases
+
+SkyCharts deliberately keeps its public and internal versions separate:
+
+- `SkyChartsPublicVersion` is the user-facing release label shown on the About page. Change it only when a new public version is explicitly requested.
+- `CFBundleShortVersionString` is the internal iteration version. It may advance during development without changing the public release label.
+- `CFBundleVersion` is the monotonically increasing internal build number.
+
+The current identities are public `V1.0 Beta`, internal `0.15.4`, and build `39`. The About page therefore displays `V1.0 Beta (Build 39)`.
+
+Create a jailbreak/AppSync-compatible IPA only for an explicitly requested public release:
+
+```sh
+export THEOS="$HOME/theos"
+make clean ipa
+```
+
+The command builds a final armv7 package, stages `SkyCharts.app`, and writes:
+
+```text
+outputs/SkyCharts-V1.0-Beta-ios6-armv7.ipa
+```
+
+The IPA uses the standard `Payload/SkyCharts.app` layout and the app's Theos signature. It is intended for a jailbroken iOS 6 device with AppSync or another compatible IPA installer; it is not an App Store-signed archive. The Debian/SSH workflow below remains the fastest development install path.
 
 ## Install, restart, and refresh SpringBoard
 
@@ -344,7 +369,7 @@ MISC        Any remaining provider type, including AOI
 
 The five controls sit inside a long dark vertical pill with protected space above STAR and below MISC, so the active orange selector remains fully visible at both ends. Tapping the selected category hides or reveals the chart list with a smooth leftward slide and fade while the chart viewer resizes. Every chart row carries a color-coded vertical stripe labeled with its exact LIDO type, including SID, SIDPT, STAR, STARPT, IAC, AGC, APC, AFC, LVC, MRC, and AOI. Within a section, runway charts are grouped under headers such as `RWY 10L` and `RWY 19R`; charts without runway metadata appear under `GENERAL`.
 
-Downloaded content is managed entirely through a collapsible location hierarchy: continent → ISO 3166-1 country → ISO 3166-2 state/province/region → city → airport. Every row reports the unique installed chart size beneath that branch. A storage summary above the hierarchy shows total SkyCharts disk usage and currently available iPad space. Swipe any level to delete all matching charts; airport- and city-level deletion rewrites multi-airport manifests and removes only assets no longer referenced, while an emptied package directory is removed automatically.
+Downloaded content is managed entirely through a collapsible location hierarchy: continent → ISO 3166-1 country/region → ISO 3166-2 state/province/region → city → airport. Every row reports the unique installed chart size beneath that branch. A storage summary above the hierarchy shows total SkyCharts disk usage and currently available iPad space. Swipe any level to delete all matching charts; airport- and city-level deletion rewrites multi-airport manifests and removes only assets no longer referenced, while an emptied package directory is removed automatically.
 
 The app includes iOS 6 icon assets at 57, 72, 114, and 144 pixels, generated from `SkyCharts/Resources/SkyChartsIcon-1024.png` with transparent outer corners and prerendered artwork.
 

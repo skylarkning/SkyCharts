@@ -1,6 +1,10 @@
 export TARGET = iphone:clang:10.3:6.0
 export ARCHS = armv7
 
+ifneq (,$(filter ipa,$(MAKECMDGOALS)))
+FINALPACKAGE := 1
+endif
+
 include $(THEOS)/makefiles/common.mk
 
 APPLICATION_NAME = SkyCharts
@@ -16,3 +20,7 @@ include $(THEOS_MAKE_PATH)/application.mk
 
 after-stage::
 	cp SkyCharts.plist "$(THEOS_STAGING_DIR)/Applications/SkyCharts.app/Info.plist"
+
+.PHONY: ipa
+ipa: package
+	sh tools/package_ipa.sh
