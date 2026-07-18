@@ -50,7 +50,24 @@ class AirportMapTests(unittest.TestCase):
             self.assertIn(value, query)
         self.assertIn('way["building"="terminal"]', query)
         self.assertIn('relation["building"="terminal"]', query)
+        self.assertIn('way["building"]["name"~"concourse|satellite"', query)
         self.assertIn("out body geom", query)
+
+    def test_named_concourse_building_is_treated_as_a_terminal(self):
+        tags = {"building": "transportation", "name": "T1 Midfield Concourse"}
+        self.assertEqual(airport_map.feature_kind(tags), "terminal")
+        raw = {"elements": [{
+            "type": "way", "id": 90, "tags": tags,
+            "geometry": [
+                {"lat": 22.30, "lon": 113.90}, {"lat": 22.30, "lon": 113.91},
+                {"lat": 22.31, "lon": 113.91}, {"lat": 22.30, "lon": 113.90},
+            ],
+        }]}
+        result = airport_map.normalize(raw, {
+            "ident": "VHHH", "name": "Hong Kong", "latitude": 22.30, "longitude": 113.91,
+        })
+        self.assertEqual(result["counts"]["terminal"], 1)
+        self.assertEqual(result["features"][0]["label"], "Terminal 1")
 
     def test_normalizes_split_terminal_multipolygon_relations(self):
         raw = {"elements": [{

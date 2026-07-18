@@ -32,7 +32,7 @@ OVERPASS_ENDPOINTS = (
 OVERPASS_REQUEST_TIMEOUT = 20
 OVERPASS_FAILURE_COOLDOWN = 180
 OVERPASS_BUSY_WAIT = 25
-OSM_SOURCE_REVISION = 2
+OSM_SOURCE_REVISION = 3
 XPLANE_SOURCE_REVISION = 4
 XPLANE_GATEWAY_AIRPORT_URL = "https://gateway.x-plane.com/apiv1/airport/{ident}"
 XPLANE_GATEWAY_SCENERY_URL = "https://gateway.x-plane.com/apiv1/scenery/{scenery_id}"
@@ -158,6 +158,8 @@ def overpass_query(latitude, longitude, radius=5500):
   way["building"="terminal"]({bbox});
   relation["building"="terminal"]({bbox});
   relation["aeroway"="terminal"]({bbox});
+  way["building"]["name"~"concourse|satellite",i]({bbox});
+  relation["building"]["name"~"concourse|satellite",i]({bbox});
   way["building"="hangar"]({bbox});
   relation["building"="hangar"]({bbox});
   relation["aeroway"="hangar"]({bbox});
@@ -872,7 +874,12 @@ def feature_kind(tags):
     if kind in MAP_KINDS:
         return kind
     building = tags.get("building")
-    return building if building in ("terminal", "hangar") else None
+    if building in ("terminal", "hangar"):
+        return building
+    name = str(tags.get("name") or "")
+    if building and re.search(r"(?:concourse|satellite)", name, re.IGNORECASE):
+        return "terminal"
+    return None
 
 
 def feature_counts(features):
