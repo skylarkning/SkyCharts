@@ -137,6 +137,7 @@ outputs/                  Local build artifacts (ignored)
 On the Mac:
 
 - macOS with Xcode command-line tools
+- Homebrew, used by the guided environment repair option
 - Theos, with `THEOS` pointing to its installation directory
 - Theos-compatible iOS 6 SDK and armv7 toolchain
 - Python 3
@@ -160,11 +161,10 @@ export THEOS="$HOME/theos"
 chmod 700 tools/skycharts tools/*.py
 mkdir -p work
 chmod 700 work
-python3 -m venv .venv
-.venv/bin/python3 -m pip install playwright
-.venv/bin/python3 -m playwright install chromium
 ./tools/skycharts
 ```
+
+On first launch, choose **Check / repair the Mac environment**. The audit reports Python, Make, Git, curl, SSH/SCP, `sshpass`, browser-login readiness, Xcode command-line tools, Theos, and the available iPhoneOS SDKs. Its repair options can install missing command-line tools with Homebrew and create the isolated Playwright/Chromium environment after confirmation. Theos and an iOS SDK are reported but remain deliberate manual installations.
 
 Choose **Sign in / refresh planner authentication**. Complete the Microsoft/Xbox login in the browser window; the client automatically writes `work/msfs-cookie.txt` with mode `0600`. Its persistent browser profile is stored under ignored `work/` data, so later refreshes normally reuse the existing Microsoft session.
 
@@ -205,7 +205,7 @@ cp packages/com.skyning.skycharts_*_iphoneos-arm.deb \
 
 The Makefile targets `iphone:clang:10.3:6.0` and `armv7`.
 
-### Version identities and public IPA releases
+### Version identities and DEB releases
 
 SkyCharts deliberately keeps its public and internal versions separate:
 
@@ -213,22 +213,23 @@ SkyCharts deliberately keeps its public and internal versions separate:
 - `CFBundleShortVersionString` is the internal iteration version. It may advance during development without changing the public release label.
 - `CFBundleVersion` is the monotonically increasing internal build number.
 
-The current identities are public `V1.0 Beta`, internal `0.15.5`, and build `40`. The About page therefore displays `V1.0 Beta (Build 40)`.
+The current identities are public `V1.0 Beta`, internal `0.15.7`, and build `42`. The About page therefore displays `V1.0 Beta (Build 42)`.
 
-Create a jailbreak/AppSync-compatible IPA only for an explicitly requested public release:
+SkyCharts is distributed only as a Debian package for jailbroken iPads. A final release build is created with:
 
 ```sh
 export THEOS="$HOME/theos"
-make clean ipa
+make clean package FINALPACKAGE=1
 ```
 
-The command builds a final armv7 package, stages `SkyCharts.app`, and writes:
+Copy the generated package to the release-artifact directory:
 
-```text
-outputs/SkyCharts-V1.0-Beta-ios6-armv7.ipa
+```sh
+cp packages/com.skyning.skycharts_0.15.7_iphoneos-arm.deb \
+  outputs/SkyCharts-0.15.7-ios6-armv7.deb
 ```
 
-The IPA uses the standard `Payload/SkyCharts.app` layout and the app's Theos signature. Its platform-app entitlements disable the normal application-container requirement so an AppSync installation retains access to `/var/mobile/Library/SkyCharts`, existing offline packs, preferences, and local Pack Agent transfers. It is intended for a jailbroken iOS 6 device with AppSync or another compatible IPA installer; it is not an App Store-signed archive. The Debian/SSH workflow below remains the fastest development install path.
+The DEB installs SkyCharts as `/Applications/SkyCharts.app`, preserving direct access to `/var/mobile/Library/SkyCharts`, existing offline packs, preferences, and local Pack Agent transfers.
 
 ## Install, restart, and refresh SpringBoard
 
@@ -236,16 +237,18 @@ The iPad uses an old SSH server, so modern OpenSSH needs RSA compatibility flags
 
 ```sh
 IP=192.168.2.19
-DEB=outputs/SkyCharts-0.15.5-ios6-armv7.deb
+DEB=outputs/SkyCharts-0.15.7-ios6-armv7.deb
 
 scp -O -o StrictHostKeyChecking=no \
+  -o UserKnownHostsFile=/dev/null \
   -o HostKeyAlgorithms=+ssh-rsa \
-  -o PubkeyAcceptedAlgorithms=+ssh-rsa \
+  -o KexAlgorithms=+diffie-hellman-group14-sha1 \
   "$DEB" root@$IP:/tmp/SkyCharts.deb
 
 ssh -o StrictHostKeyChecking=no \
+  -o UserKnownHostsFile=/dev/null \
   -o HostKeyAlgorithms=+ssh-rsa \
-  -o PubkeyAcceptedAlgorithms=+ssh-rsa \
+  -o KexAlgorithms=+diffie-hellman-group14-sha1 \
   root@$IP 'dpkg -i /tmp/SkyCharts.deb'
 ```
 
@@ -254,23 +257,23 @@ The default password on many test jailbreaks is `alpine`; change it on a real de
 Restart the app:
 
 ```sh
-ssh -o HostKeyAlgorithms=+ssh-rsa -o PubkeyAcceptedAlgorithms=+ssh-rsa \
+ssh -o HostKeyAlgorithms=+ssh-rsa -o KexAlgorithms=+diffie-hellman-group14-sha1 \
   root@$IP 'killall SkyCharts 2>/dev/null || true'
 ```
 
 Refresh the icon cache:
 
 ```sh
-ssh -o HostKeyAlgorithms=+ssh-rsa -o PubkeyAcceptedAlgorithms=+ssh-rsa \
-  root@$IP 'uicache'
+ssh -o HostKeyAlgorithms=+ssh-rsa -o KexAlgorithms=+diffie-hellman-group14-sha1 \
+  root@$IP 'su mobile -c /usr/bin/uicache'
 ```
 
 If old jailbreaks report `cannot open cache file. incorrect user?`, run the cache refresh as mobile and respring:
 
 ```sh
-ssh -o HostKeyAlgorithms=+ssh-rsa -o PubkeyAcceptedAlgorithms=+ssh-rsa \
-  root@$IP 'su -s /bin/sh mobile -c "uicache"'
-ssh -o HostKeyAlgorithms=+ssh-rsa -o PubkeyAcceptedAlgorithms=+ssh-rsa \
+ssh -o HostKeyAlgorithms=+ssh-rsa -o KexAlgorithms=+diffie-hellman-group14-sha1 \
+  root@$IP 'su mobile -c /usr/bin/uicache'
+ssh -o HostKeyAlgorithms=+ssh-rsa -o KexAlgorithms=+diffie-hellman-group14-sha1 \
   root@$IP 'killall SpringBoard 2>/dev/null || true'
 ```
 
@@ -313,9 +316,18 @@ The installer stages into a temporary directory, validates `pack.json`, and atom
 ./tools/skycharts
 ```
 
-The menu handles browser authentication, starts the Pack Agent, builds combined chart-and-map country or selected-airport packs, installs packs over SSH, and reports both cache types.
+The menu handles browser authentication, starts the Pack Agent, builds combined chart-and-map country or selected-airport packs, installs packs over SSH, installs SkyCharts DEB updates, audits the Mac environment, and reports both cache types.
 
+- Choose **Install a SkyCharts DEB package on an iPad** for a guided update. It asks for the iPad IP address, DEB path, and root password; supplies all legacy RSA/key-exchange options; preserves recoverable SkyCharts data; runs `dpkg`; refreshes `uicache` as `mobile`; and restarts SpringBoard.
+- Choose **Check / repair the Mac environment** to audit required commands. Homebrew repairs and the Playwright/Chromium setup are separate, confirmed actions; the audit itself never changes the Mac.
 - Choose **Manage cached airport packages** to search by airport ICAO or name, inspect combined chart/page/map counts and storage, delete both reusable chart and map data for selected airports, remove unidentified legacy entries, or clear the complete reusable cache. Shared chart GUIDs are retained while an unselected airport still references them.
+
+The DEB installer is also available without the menu:
+
+```sh
+./tools/skycharts install-deb outputs/SkyCharts-0.15.7-ios6-armv7.deb \
+  --host 192.168.2.19
+```
 
 Both managers remove reusable cache entries only; exported packs, Pack Agent jobs, and content already installed on the iPad remain intact. Because chart pages may be hard-linked into an existing pack or Pack Agent job, the logical cache size removed can be larger than the immediately reclaimed disk space. If no cookie file exists, authenticated operations automatically offer browser login.
 

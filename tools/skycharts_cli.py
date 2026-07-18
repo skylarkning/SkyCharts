@@ -2,7 +2,9 @@
 """Friendly interactive launcher for SkyCharts Mac tools."""
 
 import argparse
+import getpass
 import json
+import os
 import pathlib
 import shutil
 import subprocess
@@ -12,6 +14,22 @@ from skycharts_auth import browser_login
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 PYTHON = sys.executable
+SSH_OPTIONS = [
+    "-o", "ConnectTimeout=10",
+    "-o", "StrictHostKeyChecking=no",
+    "-o", "UserKnownHostsFile=/dev/null",
+    "-o", "HostKeyAlgorithms=+ssh-rsa",
+    "-o", "KexAlgorithms=+diffie-hellman-group14-sha1",
+]
+BREW_REQUIREMENTS = (
+    ("python3", "Python 3 runtime", "python@3.14"),
+    ("make", "Build driver", "make"),
+    ("git", "Git", "git"),
+    ("curl", "HTTP downloader", "curl"),
+    ("ssh", "SSH client", "openssh"),
+    ("scp", "SCP client", "openssh"),
+    ("sshpass", "Non-interactive iPad password helper", "sshpass"),
+)
 
 
 def ask(label, default=None):
@@ -42,6 +60,200 @@ def airports(cookie, idents, output, name, pack_id, workers):
 
 def install(pack, host):
     return run([PYTHON, ROOT / "tools" / "skycharts_downloader.py", "install", pack, "--host", host])
+
+
+def latest_deb(output_dir=None):
+    output_dir = pathlib.Path(output_dir or ROOT / "outputs")
+    matches = list(output_dir.glob("SkyCharts-*-ios6-armv7.deb")) if output_dir.exists() else []
+    return max(matches, key=lambda path: path.stat().st_mtime) if matches else None
+
+
+def authenticated_command(command, password):
+    environment = os.environ.copy()
+    if password:
+        if not shutil.which("sshpass"):
+            raise RuntimeError("sshpass is missing. Run Mac environment repair from the SkyCharts menu.")
+        environment["SSHPASS"] = password
+        return ["sshpass", "-e"] + list(command), environment
+    return list(command), environment
+
+
+def run_private(command, password, acceptable=(0,)):
+    prepared, environment = authenticated_command(command, password)
+    print("\n$ " + " ".join(str(item) for item in prepared) + "\n")
+    status = subprocess.call([str(item) for item in prepared], cwd=str(ROOT), env=environment)
+    if status not in acceptable:
+        raise RuntimeError("Command failed with status %d." % status)
+    return status
+
+
+def install_deb(deb, host, password="alpine"):
+    deb = pathlib.Path(deb).expanduser().resolve()
+    if not deb.is_file():
+        raise RuntimeError("DEB package was not found: %s" % deb)
+    if deb.suffix.lower() != ".deb":
+        raise RuntimeError("Selected file is not a DEB package: %s" % deb)
+    missing = [command for command in ("ssh", "scp") if not shutil.which(command)]
+    if password and not shutil.which("sshpass"):
+        missing.append("sshpass")
+    if missing:
+        raise RuntimeError("Missing Mac command%s: %s. Run Mac environment repair first." % (
+            "s" if len(missing) != 1 else "", ", ".join(missing)))
+
+    print("\nInstalling %s on root@%s" % (deb.name, host))
+    print("1/3 Transferring DEB package…")
+    run_private(["scp", "-O"] + SSH_OPTIONS + [str(deb), "root@%s:/tmp/SkyCharts.deb" % host], password)
+
+    print("2/3 Migrating old SkyCharts data and installing…")
+    remote_install = (
+        "set -e; "
+        "mkdir -p /var/mobile/Library/SkyCharts/ChartPacks; "
+        "for app in /var/mobile/Applications/*/SkyCharts.app; do "
+        "[ -d \"$app\" ] || continue; container=${app%/SkyCharts.app}; "
+        "if [ -d \"$container/Documents/SkyCharts/ChartPacks\" ]; then "
+        "cp -Rp \"$container/Documents/SkyCharts/ChartPacks/.\" /var/mobile/Library/SkyCharts/ChartPacks/ 2>/dev/null || true; fi; "
+        "rm -rf \"$container\"; done; "
+        "killall SkyCharts >/dev/null 2>&1 || true; "
+        "dpkg -i /tmp/SkyCharts.deb; "
+        "chown -R root:wheel /Applications/SkyCharts.app; "
+        "chmod -R a+rX /Applications/SkyCharts.app; "
+        "chown -R mobile:mobile /var/mobile/Library/SkyCharts; "
+        "su mobile -c /usr/bin/uicache; "
+        "rm -f /tmp/SkyCharts.deb"
+    )
+    run_private(["ssh"] + SSH_OPTIONS + ["root@%s" % host, remote_install], password)
+
+    print("3/3 Restarting SpringBoard…")
+    run_private(
+        ["ssh"] + SSH_OPTIONS + ["root@%s" % host, "killall SpringBoard >/dev/null 2>&1 || true"],
+        password,
+        acceptable=(0, 255),
+    )
+    print("\nSkyCharts DEB installation completed. The existing offline chart library was preserved.\n")
+    return 0
+
+
+def playwright_status(python=PYTHON):
+    script = (
+        "from pathlib import Path; "
+        "from playwright.sync_api import sync_playwright; "
+        "p=sync_playwright().start(); path=p.chromium.executable_path; p.stop(); "
+        "raise SystemExit(0 if Path(path).is_file() else 1)"
+    )
+    return subprocess.call(
+        [str(python), "-c", script], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL) == 0
+
+
+def environment_status(which=None, python=PYTHON):
+    which = which or shutil.which
+    status = []
+    for command, label, formula in BREW_REQUIREMENTS:
+        path = which(command)
+        status.append({
+            "command": command,
+            "label": label,
+            "formula": formula,
+            "available": bool(path),
+            "path": path or "",
+        })
+    status.append({
+        "command": "playwright",
+        "label": "Browser sign-in support",
+        "formula": "",
+        "available": playwright_status(python),
+        "path": str(pathlib.Path(python).resolve()),
+    })
+    theos = pathlib.Path(os.environ.get("THEOS", pathlib.Path.home() / "theos")).expanduser()
+    status.append({
+        "command": "theos",
+        "label": "Theos build system",
+        "formula": "",
+        "available": (theos / "makefiles" / "common.mk").is_file(),
+        "path": str(theos),
+    })
+    sdks = sorted((theos / "sdks").glob("iPhoneOS*.sdk")) if (theos / "sdks").exists() else []
+    status.append({
+        "command": "ios-sdk",
+        "label": "Theos iPhoneOS SDK",
+        "formula": "",
+        "available": bool(sdks),
+        "path": ", ".join(path.name for path in sdks),
+    })
+    xcrun = which("xcrun")
+    status.append({
+        "command": "xcode-cli",
+        "label": "Xcode command-line tools",
+        "formula": "",
+        "available": bool(xcrun),
+        "path": xcrun or "",
+    })
+    return status
+
+
+def print_environment_status(status=None):
+    status = status or environment_status()
+    print("\nSkyCharts Mac Environment")
+    print("=========================\n")
+    for item in status:
+        state = "READY" if item["available"] else "MISSING"
+        detail = " — %s" % item["path"] if item["available"] and item["path"] else ""
+        print("[%s] %s%s" % (state, item["label"], detail))
+    missing = [item for item in status if not item["available"]]
+    print("\n%s\n" % ("Environment is ready." if not missing else "%d component(s) need attention." % len(missing)))
+    return not missing
+
+
+def install_homebrew_requirements(status=None):
+    status = status or environment_status()
+    formulas = []
+    for item in status:
+        if not item["available"] and item["formula"] and item["formula"] not in formulas:
+            formulas.append(item["formula"])
+    if not formulas:
+        print("No missing Homebrew packages were found.")
+        return 0
+    if not shutil.which("brew"):
+        print("Homebrew is not installed. Install it from https://brew.sh and run this option again.")
+        return 1
+    print("Homebrew will install: %s" % ", ".join(formulas))
+    if not ask("Continue? (y/N)", "N").lower().startswith("y"):
+        return 0
+    return run(["brew", "install"] + formulas)
+
+
+def install_browser_environment():
+    venv = ROOT / ".venv"
+    venv_python = venv / "bin" / "python3"
+    print("This creates or repairs .venv and installs Playwright with Chromium for planner browser login.")
+    if not ask("Continue? (y/N)", "N").lower().startswith("y"):
+        return 0
+    if not venv_python.exists():
+        status = run([PYTHON, "-m", "venv", venv])
+        if status:
+            return status
+    status = run([venv_python, "-m", "pip", "install", "--upgrade", "pip", "playwright"])
+    if status:
+        return status
+    return run([venv_python, "-m", "playwright", "install", "chromium"])
+
+
+def manage_environment():
+    while True:
+        status = environment_status()
+        print_environment_status(status)
+        print("""1. Install missing command-line packages with Homebrew
+2. Install/repair browser sign-in environment
+0. Back
+""")
+        choice = input("Choose an option: ").strip()
+        if choice == "0":
+            return
+        if choice == "1":
+            install_homebrew_requirements(status)
+        elif choice == "2":
+            install_browser_environment()
+        else:
+            print("Unknown option.")
 
 
 def airport_map(ident, output, refresh=False):
@@ -524,9 +736,11 @@ SkyCharts Mac Client
 2. Start Pack Agent for the iPad
 3. Download a country pack on this Mac
 4. Download selected airports
-5. Install an existing pack over SSH
-6. Show reusable cache status
-7. Manage cached airport packages
+5. Install an existing chart pack over SSH
+6. Install a SkyCharts DEB package on an iPad
+7. Check / repair the Mac environment
+8. Show reusable cache status
+9. Manage cached airport packages
 0. Quit
 """)
         choice = input("Choose an option: ").strip()
@@ -563,8 +777,19 @@ SkyCharts Mac Client
             host = ask("iPad IP address", "192.168.2.19")
             install(pack, host)
         elif choice == "6":
-            cache_status()
+            default_deb = latest_deb()
+            deb = ask("Path to DEB package", str(default_deb) if default_deb else str(ROOT / "outputs"))
+            host = ask("iPad IP address", "192.168.2.19")
+            password = getpass.getpass("iPad root password [alpine]: ") or "alpine"
+            try:
+                install_deb(deb, host, password)
+            except RuntimeError as error:
+                print("\nInstallation failed: %s\n" % error)
         elif choice == "7":
+            manage_environment()
+        elif choice == "8":
+            cache_status()
+        elif choice == "9":
             manage_airport_package_cache()
         else:
             print("Unknown option.")
@@ -573,7 +798,23 @@ SkyCharts Mac Client
 def main():
     parser = argparse.ArgumentParser(description="SkyCharts Mac Client")
     parser.add_argument("--menu", action="store_true", help="open the interactive menu")
+    subparsers = parser.add_subparsers(dest="command")
+    installer = subparsers.add_parser("install-deb", help="install a SkyCharts DEB on a jailbroken iPad")
+    installer.add_argument("deb", help="path to the SkyCharts DEB package")
+    installer.add_argument("--host", default="192.168.2.19", help="iPad IP address")
+    subparsers.add_parser("check-environment", help="audit the Mac environment without changing it")
     args = parser.parse_args()
+    if args.command == "install-deb":
+        password = os.environ.get("SKYCHARTS_IPAD_PASSWORD")
+        if password is None:
+            password = getpass.getpass("iPad root password [alpine]: ") or "alpine"
+        try:
+            return install_deb(args.deb, args.host, password)
+        except RuntimeError as error:
+            print("Installation failed: %s" % error, file=sys.stderr)
+            return 1
+    if args.command == "check-environment":
+        return 0 if print_environment_status() else 1
     return interactive()
 
 
