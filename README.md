@@ -1,7 +1,9 @@
 # SkyCharts
 
 <p align="center">
-  <img src="docs/screenshots/airport-ground-chart.png" alt="SkyCharts displaying the Vancouver airport ground chart" width="900">
+  <img src="docs/screenshots/skycharts-agc-main.png" alt="SkyCharts displaying the CYYZ airport ground chart with a color-coded chart list" width="900">
+  <br>
+  <sub><strong>CYYZ Airport Ground Chart</strong> — offline LIDO chart viewing with a color-coded, collapsible chart browser.</sub>
 </p>
 
 SkyCharts brings an offline aviation-chart library to jailbroken iPads running iOS 6. The native UIKit application presents Microsoft Flight Simulator 2024 LIDO charts in a compact, Jeppesen-inspired interface designed for both portrait and landscape use.
@@ -98,24 +100,22 @@ Each level shows its unique chart and airport-map storage. The summary at the to
 
 Open the gear menu and choose **About SkyCharts** to see the installed version, build number, developer credit, copyright, and project disclaimer.
 
-## Screenshots
+## Latest screenshots
+
+The screenshots below show the current **V1.0 Beta (Build 40)** interface on an iPad running iOS 6.
 
 <table>
   <tr>
-    <td width="50%"><img src="docs/screenshots/chart-types-star.png" alt="STAR chart list with orange LIDO type stripes"><br><strong>STAR charts</strong> — orange type stripes identify arrival procedures.</td>
-    <td width="50%"><img src="docs/screenshots/chart-types-sid.png" alt="SID chart list with green and gray LIDO type stripes"><br><strong>SID and SIDPT charts</strong> — procedure and transition types remain visually distinct.</td>
+    <td width="50%"><img src="docs/screenshots/skycharts-approach-chart.png" alt="SkyCharts approach chart browser displaying CYYZ ILS or LOC runway 05"><br><strong>Approach chart browser</strong> — runway-grouped procedures use cyan IAC type stripes, compact metadata, and a clear selected-chart indicator.</td>
+    <td width="50%"><img src="docs/screenshots/skycharts-star-chart.png" alt="SkyCharts displaying the CYYZ IMEBA 9 STAR chart"><br><strong>Expanded STAR chart</strong> — hide the chart list to devote the main viewing area to a full procedure chart.</td>
   </tr>
   <tr>
-    <td width="50%"><img src="docs/screenshots/chart-types-approach.png" alt="Approach chart list with cyan IAC type stripes"><br><strong>Approach charts</strong> — cyan IAC stripes accompany runway-grouped procedures.</td>
-    <td width="50%"><img src="docs/screenshots/chart-types-airport.png" alt="Airport chart list with AFC, APC, LVC, and AGC type stripes"><br><strong>Airport chart families</strong> — AFC, APC, LVC, and AGC use consistent type colors.</td>
+    <td width="50%"><img src="docs/screenshots/skycharts-settings.png" alt="SkyCharts settings menu over a CYYZ STAR chart"><br><strong>Settings and downloads</strong> — request combined chart-and-map packs by country/region or ICAO code, manage installed content, and open application information.</td>
+    <td width="50%"><img src="docs/screenshots/skycharts-weather.png" alt="SkyCharts decoded CYYZ METAR weather window"><br><strong>METAR weather</strong> — view the latest observation in raw or decoded form without leaving the selected chart.</td>
   </tr>
   <tr>
-    <td width="50%"><img src="docs/screenshots/chart-fullscreen.png" alt="Full-screen arrival chart"><br><strong>Expanded chart</strong> — collapse the list for a larger viewing area.</td>
-    <td width="50%"><img src="docs/screenshots/weather.png" alt="Decoded METAR weather window"><br><strong>METAR weather</strong> — raw and decoded observations.</td>
-  </tr>
-  <tr>
-    <td width="50%"><img src="docs/screenshots/downloaded-content.png" alt="Downloaded content storage manager"><br><strong>Downloaded content</strong> — geographic hierarchy and storage reporting.</td>
-    <td width="50%"><img src="docs/screenshots/about-skycharts.png" alt="About SkyCharts page"><br><strong>About SkyCharts</strong> — version and project information.</td>
+    <td width="50%"><img src="docs/screenshots/skycharts-downloaded-content.png" alt="SkyCharts downloaded content manager showing countries and regions with storage usage"><br><strong>Downloaded content</strong> — browse the geographic hierarchy, review per-level storage usage, and remove content at any level.</td>
+    <td width="50%"><img src="docs/screenshots/skycharts-about.png" alt="About SkyCharts page showing the application icon and V1.0 Beta Build 40"><br><strong>About SkyCharts</strong> — the application icon, public version, internal build number, developer credit, and simulation-only disclaimer.</td>
   </tr>
 </table>
 
