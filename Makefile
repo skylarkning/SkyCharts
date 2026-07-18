@@ -1,15 +1,11 @@
 export TARGET = iphone:clang:10.3:6.0
 export ARCHS = armv7
 
-ifneq (,$(filter ipa,$(MAKECMDGOALS)))
-FINALPACKAGE := 1
-endif
-
 include $(THEOS)/makefiles/common.mk
 
 APPLICATION_NAME = SkyCharts
 
-SkyCharts_FILES = SkyCharts/main.m SkyCharts/AppDelegate.m SkyCharts/ChartViewController.m SkyCharts/AirportMapViewController.m SkyCharts/ContentManagerViewController.m SkyCharts/AboutViewController.m SkyCharts/PackArchiveInstaller.m SkyCharts/WeatherViewController.m SkyCharts/Compat.c
+SkyCharts_FILES = SkyCharts/main.m SkyCharts/AppDelegate.m SkyCharts/ChartViewController.m SkyCharts/AirportMapViewController.m SkyCharts/ContentManagerViewController.m SkyCharts/AboutViewController.m SkyCharts/PackArchiveInstaller.m SkyCharts/StoragePaths.m SkyCharts/WeatherViewController.m SkyCharts/Compat.c
 SkyCharts_FRAMEWORKS = UIKit Foundation CoreGraphics QuartzCore Security
 SkyCharts_CFLAGS = -fno-objc-arc -Wno-deprecated-declarations -fmodules-cache-path=$(THEOS_PROJECT_DIR)/.theos/module-cache
 SkyCharts_CODESIGN_FLAGS = -SSkyCharts.entitlements
@@ -21,7 +17,3 @@ include $(THEOS_MAKE_PATH)/application.mk
 
 after-stage::
 	cp SkyCharts.plist "$(THEOS_STAGING_DIR)/Applications/SkyCharts.app/Info.plist"
-
-.PHONY: ipa
-ipa: package
-	sh tools/package_ipa.sh
